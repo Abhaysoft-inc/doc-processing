@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document Processing</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0d0d0d;
+      color: #e5e5e5;
+      padding: 2.5rem 1.5rem;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #262626;
+      padding-bottom: 1.25rem;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    p.subtitle {
+      font-size: 0.875rem;
+      color: #737373;
+      margin-top: 0.25rem;
+    }
+
+    .form-group {
+      margin-bottom: 2rem;
+    }
+
+    .dropzone {
+      border: 1px dashed #333333;
+      border-radius: 6px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      background-color: #141414;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #666666;
+    }
+
+    .dropzone p {
+      font-size: 0.875rem;
+      color: #a3a3a3;
+    }
+
+    .dropzone span {
+      font-size: 0.75rem;
+      color: #555555;
+      display: block;
+      margin-top: 0.5rem;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .file-selected {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #171717;
+      border: 1px solid #262626;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: #737373;
+      cursor: pointer;
+      font-size: 0.8125rem;
+    }
+
+    .btn-remove:hover {
+      color: #ef4444;
+    }
+
+    button.btn-submit {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background-color: #ffffff;
+      color: #000000;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    button.btn-submit:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    button.btn-submit:disabled {
+      background-color: #262626;
+      color: #555555;
+      cursor: not-allowed;
+    }
+
+    /* Steps Progress Tracker */
+    .steps-progress {
+      display: none;
+      margin-top: 1.25rem;
+      padding: 1rem;
+      background: #141414;
+      border: 1px solid #262626;
+      border-radius: 6px;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+      color: #555555;
+      transition: color 0.15s ease;
+    }
+
+    .step-item.active {
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .step-item.completed {
+      color: #a3a3a3;
+    }
+
+    .step-item.failed {
+      color: #ef4444;
+    }
+
+    .step-indicator {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid #444444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6875rem;
+      font-family: ui-monospace, monospace;
+      flex-shrink: 0;
+    }
+
+    .step-item.active .step-indicator {
+      border-color: #ffffff;
+      color: #ffffff;
+    }
+
+    .step-item.completed .step-indicator {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .step-item.failed .step-indicator {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .spinner-inline {
+      width: 10px;
+      height: 10px;
+      border: 1px solid #333333;
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result-section {
+      display: none;
+      margin-top: 2rem;
+      border-top: 1px solid #262626;
+      padding-top: 1.5rem;
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .result-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-copy {
+      background: #171717;
+      border: 1px solid #333333;
+      color: #e5e5e5;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .btn-copy:hover {
+      background: #262626;
+    }
+
+    .meta-box {
+      background: #141414;
+      border: 1px solid #262626;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.8125rem;
+      margin-bottom: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .meta-row {
+      display: flex;
+      margin-bottom: 0.25rem;
+    }
+
+    .meta-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .meta-label {
+      color: #737373;
+      width: 110px;
+      flex-shrink: 0;
+    }
+
+    .meta-value {
+      color: #d4d4d4;
+      word-break: break-all;
+    }
+
+    .meta-value a {
+      color: #e5e5e5;
+      text-decoration: underline;
+    }
+
+    pre.output-box {
+      background-color: #141414;
+      border: 1px solid #262626;
+      border-radius: 6px;
+      padding: 1rem;
+      color: #f5f5f5;
+      font-size: 0.875rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+    }
+
+    .error-box {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #1c1012;
+      border: 1px solid #4a171d;
+      border-radius: 6px;
+      color: #f87171;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Document Processing</h1>
+      <p class="subtitle">Upload a PDF, DOCX, or Image file to extract document data.</p>
+    </header>
+
+    <div class="form-group">
+      <div class="dropzone" id="dropzone">
+        <p>Click or drag a file to upload</p>
+        <span>Supports PDF, DOCX, PNG, JPG, WEBP (Max 20MB)</span>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp,.gif,.tiff,.tif">
+
+      <div class="file-selected" id="fileSelected">
+        <span id="fileNameDisplay">file.pdf</span>
+        <button type="button" class="btn-remove" id="btnRemove">Remove</button>
+      </div>
+
+      <button type="button" class="btn-submit" id="btnSubmit" disabled>Process Document</button>
+
+      <!-- Steps Progress Tracker -->
+      <div class="steps-progress" id="stepsProgress">
+        <div class="step-item" id="stepValidation">
+          <div class="step-indicator">1</div>
+          <span>Format & Size Validation</span>
+        </div>
+        <div class="step-item" id="stepS3">
+          <div class="step-indicator">2</div>
+          <span>AWS S3 Upload</span>
+        </div>
+        <div class="step-item" id="stepVLM">
+          <div class="step-indicator">3</div>
+          <span>Gemini VLM Extraction</span>
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+    </div>
+
+    <div class="result-section" id="resultSection">
+      <div class="result-header">
+        <span class="result-title">Extracted Output</span>
+        <button type="button" class="btn-copy" id="btnCopy">Copy</button>
+      </div>
+
+      <div class="meta-box" id="metaBox">
+        <div class="meta-row">
+          <span class="meta-label">Job ID:</span>
+          <span class="meta-value" id="resJobId">-</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">File:</span>
+          <span class="meta-value" id="resFileName">-</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">S3 URL:</span>
+          <span class="meta-value" id="resS3Location">-</span>
+        </div>
+      </div>
+
+      <pre class="output-box" id="outputContent"></pre>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelected = document.getElementById('fileSelected');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const btnRemove = document.getElementById('btnRemove');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const stepsProgress = document.getElementById('stepsProgress');
+    const stepValidation = document.getElementById('stepValidation');
+    const stepS3 = document.getElementById('stepS3');
+    const stepVLM = document.getElementById('stepVLM');
+    const errorBox = document.getElementById('errorBox');
+    const resultSection = document.getElementById('resultSection');
+    const resJobId = document.getElementById('resJobId');
+    const resFileName = document.getElementById('resFileName');
+    const resS3Location = document.getElementById('resS3Location');
+    const outputContent = document.getElementById('outputContent');
+    const btnCopy = document.getElementById('btnCopy');
+
+    let currentFile = null;
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files.length) {
+        setFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        setFile(e.target.files[0]);
+      }
+    });
+
+    btnRemove.addEventListener('click', () => {
+      clearFile();
+    });
+
+    function setFile(file) {
+      currentFile = file;
+      fileNameDisplay.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      dropzone.style.display = 'none';
+      fileSelected.style.display = 'flex';
+      btnSubmit.disabled = false;
+      resetSteps();
+      hideError();
+    }
+
+    function clearFile() {
+      currentFile = null;
+      fileInput.value = '';
+      dropzone.style.display = 'block';
+      fileSelected.style.display = 'none';
+      btnSubmit.disabled = true;
+      resetSteps();
+      hideError();
+      resultSection.style.display = 'none';
+    }
+
+    function resetSteps() {
+      stepsProgress.style.display = 'none';
+      setStep(stepValidation, '', '1');
+      setStep(stepS3, '', '2');
+      setStep(stepVLM, '', '3');
+    }
+
+    function setStep(stepEl, status, defaultNum) {
+      stepEl.className = 'step-item ' + status;
+      const ind = stepEl.querySelector('.step-indicator');
+      if (status === 'active') {
+        ind.innerHTML = '<div class="spinner-inline"></div>';
+      } else if (status === 'completed') {
+        ind.innerHTML = '&#10003;';
+      } else if (status === 'failed') {
+        ind.innerHTML = '&#10007;';
+      } else {
+        ind.textContent = defaultNum;
+      }
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = 'block';
+    }
+
+    function hideError() {
+      errorBox.textContent = '';
+      errorBox.style.display = 'none';
+    }
+
+    btnSubmit.addEventListener('click', async () => {
+      if (!currentFile) return;
+
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = 'Processing...';
+      hideError();
+      resultSection.style.display = 'none';
+
+      // Show steps progress
+      stepsProgress.style.display = 'flex';
+      setStep(stepValidation, 'completed', '1');
+      setStep(stepS3, 'active', '2');
+      setStep(stepVLM, 'active', '3');
+
+      const formData = new FormData();
+      formData.append('file', currentFile);
+
+      try {
+        const response = await fetch('/api/docs/process', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Processing failed');
+        }
+
+        // All steps succeeded
+        setStep(stepValidation, 'completed', '1');
+        setStep(stepS3, 'completed', '2');
+        setStep(stepVLM, 'completed', '3');
+
+        resJobId.textContent = data.jobId;
+        resFileName.textContent = `${data.data.originalName} (${(data.data.sizeBytes / 1024).toFixed(1)} KB)`;
+        resS3Location.innerHTML = `<a href="${data.data.s3Location}" target="_blank" rel="noopener noreferrer">${data.data.s3Location}</a>`;
+        outputContent.textContent = data.data.extractedInfo;
+
+        resultSection.style.display = 'block';
+      } catch (err) {
+        setStep(stepS3, 'failed', '2');
+        setStep(stepVLM, 'failed', '3');
+        showError(err.message || 'An error occurred during processing.');
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Process Document';
+      }
+    });
+
+    btnCopy.addEventListener('click', () => {
+      if (!outputContent.textContent) return;
+      navigator.clipboard.writeText(outputContent.textContent).then(() => {
+        btnCopy.textContent = 'Copied';
+        setTimeout(() => {
+          btnCopy.textContent = 'Copy';
+        }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>
