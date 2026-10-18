@@ -3,6 +3,20 @@ import crypto from 'node:crypto';
 import { requestContext } from '../../shared/context.js';
 import { logger } from '../../shared/logger.js';
 
+
+/**
+ * Assigns a request ID and stores a request-scoped logger in AsyncLocalStorage.
+ *
+ * Why: uploads are processed concurrently, so their log lines interleave.
+ * Tagging every line with a requestId lets us trace one document end to end
+ * (controller -> extraction -> S3) without passing a logger through every
+ * function. The same ID is returned in the x-request-id response header so
+ * support can look up a failed request.
+ *
+ * Must be registered FIRST in index.ts, otherwise code that runs before it
+ * has no request context.
+ */
+
 export function requestContextMiddleware(req: Request, res: Response, next: NextFunction): void {
   const incomingId = req.headers['x-request-id'];
   const requestId =

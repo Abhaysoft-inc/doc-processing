@@ -7,6 +7,7 @@ An end-to-end document ingestion, cloud storage, deterministic triage, AI-powere
 ## 📋 Table of Contents
 - [Architecture & Workflow](#-architecture--workflow)
 - [Module Structure](#-module-structure)
+- [Interactive API Documentation (Swagger UI / OpenAPI)](#-interactive-api-documentation-swagger-ui--openapi)
 - [API Routes Reference](#-api-routes-reference)
   - [`POST /api/documents/process`](#post-apidocumentsprocess)
   - [`POST /api/documents/generate/docx`](#post-apidocumentsgeneratedocx)
@@ -14,6 +15,7 @@ An end-to-end document ingestion, cloud storage, deterministic triage, AI-powere
   - [`POST /api/documents/generate/all`](#post-apidocumentsgenerateall)
   - [`POST /api/documents/presigned-upload`](#post-apidocumentspresigned-upload)
   - [`GET /health`](#get-health)
+  - [`GET /healthz`](#get-healthz)
 - [Canonical Document AST Specification](#-canonical-document-ast-specification)
 - [Configuration & Environment Variables](#-configuration--environment-variables)
 - [Quickstart & Testing](#-quickstart--testing)
@@ -67,6 +69,11 @@ doc-processing/
 │   └── index.html               # Web UI for drag-and-drop document testing & preview
 ├── src/
 │   ├── api/
+│   │   ├── docs/
+│   │   │   └── openapi.ts           # OpenAPI 3.0 specification & Zod-to-OpenAPI registry
+│   │   ├── middleware/
+│   │   │   ├── error-handler.middleware.ts  # Central RFC 7807 error handler
+│   │   │   └── request-context.middleware.ts # AsyncLocalStorage request tracing
 │   │   ├── document.routes.ts       # Express routes & Multer middleware
 │   │   └── document.controller.ts   # Controllers for ingest, export, presigned URLs
 │   ├── config/
@@ -89,6 +96,10 @@ doc-processing/
 │   │   │   └── pdf-generator.ts     # Puppeteer PDF generation with SSRF guards
 │   │   └── storage/
 │   │       └── s3.service.ts        # AWS S3 buffer upload & presigned URLs
+│   ├── shared/
+│   │   ├── context.ts               # AsyncLocalStorage request-scoped logger
+│   │   ├── errors.ts                # AppError class and wrap() helper
+│   │   └── logger.ts                # Pino structured logger (dev pretty / prod raw JSON)
 │   ├── types/
 │   │   └── mammoth.d.ts             # Ambient TypeScript type declarations
 │   └── index.ts                     # Express initialization with 50MB body limit
@@ -96,6 +107,19 @@ doc-processing/
 ├── .env.example                 # Environment template
 └── package.json
 ```
+
+---
+
+## 📖 Interactive API Documentation (Swagger UI / OpenAPI)
+
+Interactive documentation and OpenAPI 3.0 specifications are automatically generated from runtime Zod schemas via `@asteasolutions/zod-to-openapi` and served via `swagger-ui-express`:
+
+- **Swagger UI Interactive Explorer:**  
+  `http://localhost:3000/api/docs` (or alias: `http://localhost:3000/docs`)
+- **OpenAPI 3.0 JSON Specification:**  
+  `http://localhost:3000/api/docs.json` (or alias: `http://localhost:3000/openapi.json`)
+
+All request contracts, multipart file uploads, query/header parameters (`x-file-sha256`), canonical AST structures, error codes, and binary downloads are documented and executable directly within Swagger UI.
 
 ---
 

@@ -1,23 +1,25 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config/index.js';
 import documentRouter from './api/document.routes.js';
+import { openApiDocument } from './api/docs/openapi.js';
 import { requestContextMiddleware } from './api/middleware/request-context.middleware.js';
 import { errorHandlerMiddleware } from './api/middleware/error-handler.middleware.js';
 import { logger } from './shared/logger.js';
 
 const app = express();
 
-// 1. Request context middleware MUST be first
+// request context middleware Must be registered FIRST in index.ts, otherwise code that runs before it has no request context.
+
 app.use(requestContextMiddleware);
 
 app.use(cors());
-// Support large AST payloads for complex multi-page legal documents
+
 app.use(express.json({ limit: config.bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: config.bodyLimit }));
 
-// Serve UI assets from public folder
 app.use(express.static(path.resolve(process.cwd(), 'public')));
 
 // Standard container liveness / readiness probe
@@ -32,20 +34,22 @@ app.get('/health', (req, res) => {
     environment: config.env,
     isProduction: config.isProduction,
     timestamp: new Date().toISOString(),
-    geminiConfigured: !!config.gemini.apiKey,
-    geminiModel: config.gemini.model,
-    s3Bucket: config.aws.bucketName,
-    limits: {
-      maxFileSizeMb: config.maxFileSizeMb,
-      bodyLimit: config.bodyLimit,
-    },
   });
 });
 
-// Routes
+// Interactive API Documentation (Swagger UI) & raw OpenAPI spec
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
+app.get('/api/docs.json', (req, res) => {
+  res.json(openApiDocument);
+});
+app.get('/openapi.json', (req, res) => {
+  res.json(openApiDocument);
+});
+
+// Business routes
 app.use('/api/documents', documentRouter);
 
-// 2. Error handler middleware MUST be registered last
 app.use(errorHandlerMiddleware);
 
 const server = app.listen(config.port, () => {
@@ -54,10 +58,12 @@ const server = app.listen(config.port, () => {
       port: config.port,
       environment: config.env,
       logLevel: config.logLevel,
+      docsUrl: `http://localhost:${config.port}/api/docs`,
     },
-    `Server listening on port ${config.port} in ${config.env} mode`
+    `Server listening on port ${config.port} in ${config.env} mode. Swagger UI: http://localhost:${config.port}/api/docs`
   );
 });
+
 
 // Graceful shutdown handling
 let isShuttingDown = false;

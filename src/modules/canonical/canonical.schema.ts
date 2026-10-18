@@ -1,5 +1,8 @@
 import { z } from 'zod';
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { CanonicalDocument } from './canonical.types.js';
+
+extendZodWithOpenApi(z);
 
 export const textRunSchema = z.object({
   text: z.string(),
@@ -67,7 +70,10 @@ export const pageBreakBlockSchema = z.object({
 export const listItemSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     runs: z.array(textRunSchema),
-    subList: listBlockSchema.optional(),
+    subList: (listBlockSchema as any).optional().openapi({
+      type: 'object',
+      description: 'Nested sublist (recursive list block)',
+    }),
   })
 );
 
