@@ -96,16 +96,6 @@ export async function generatePdfBuffer(doc: CanonicalDocument): Promise<Buffer>
     const buffer = Buffer.from(pdfUint8Array);
     const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
 
-    // Per-call detail at DEBUG
-    log().debug(
-      {
-        format: 'pdf',
-        durationMs,
-        outputSizeBytes: buffer.length,
-      },
-      'PDF buffer compiled'
-    );
-
     // One INFO summary per generated document
     log().info(
       {

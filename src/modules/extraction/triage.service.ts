@@ -5,6 +5,7 @@ import { extractFromDocx } from './docx-extractor.service.js';
 import { extractFromDoc } from './doc-extractor.service.js';
 import { extractWithVlm } from './vlm-extractor.service.js';
 import { log } from '../../shared/context.js';
+import { AppError } from '../../shared/errors.js';
 
 export interface ExtractionTriageResult {
   ast: CanonicalDocument;
@@ -18,7 +19,8 @@ export interface ExtractionTriageResult {
  * 2. PDF (digital with selectable text) -> pdfjs-dist deterministic parsing
  * 3. PDF (scanned/raster) or Images -> Gemini VLM extraction
  *
- * Logs per-route decision at DEBUG and outputs ONE INFO summary line per document at the end.
+ * Outputs ONE INFO summary line per document at the end and wraps library errors
+ * once at this top-level entrypoint as EXTRACTION_FAILED.
  */
 export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionTriageResult> {
   const startHr = process.hrtime.bigint();
@@ -40,10 +42,6 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
       (name.endsWith('.doc') && ext !== 'docx')
     ) {
       route = 'digital_doc';
-      log().debug(
-        { route, reason: 'Legacy Compound File Binary Format (.doc) detected' },
-        'Triage routed document to legacy Word DOC parser'
-      );
       try {
         const ast = await extractFromDoc(file.buffer, file.originalName);
         ast.metadata.originalFileSha256 = file.sha256;
@@ -62,10 +60,6 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
       name.endsWith('.docx')
     ) {
       route = 'digital_docx';
-      log().debug(
-        { route, reason: 'OpenXML DOCX format detected' },
-        'Triage routed document to DOCX parser'
-      );
       try {
         const ast = await extractFromDocx(file.buffer, file.originalName);
         ast.metadata.originalFileSha256 = file.sha256;
@@ -79,19 +73,10 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
       }
     } else if (mime === 'application/pdf' || name.endsWith('.pdf')) {
       // Route 2: PDF files
-      log().debug({ mime }, 'Inspecting PDF for digital text layer');
       const digitalResult = await extractFromDigitalPdf(file.buffer, file.originalName);
 
       if (digitalResult.isDigital && digitalResult.ast) {
         route = 'digital_pdf';
-        log().debug(
-          {
-            route,
-            reason: 'Clean digital text layer detected',
-            pages: digitalResult.pageCount,
-          },
-          'Triage routed document to digital PDF parser'
-        );
         digitalResult.ast.metadata.originalFileSha256 = file.sha256;
         result = {
           ast: digitalResult.ast,
@@ -100,14 +85,6 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
         };
       } else {
         route = 'vlm_ocr';
-        log().debug(
-          {
-            route,
-            reason: 'PDF is scanned or rasterized with insufficient selectable text layer',
-            pages: digitalResult.pageCount,
-          },
-          'Triage escalating scanned/raster PDF to Gemini VLM'
-        );
         const ast = await extractWithVlm(file.buffer, mime, file.originalName);
         ast.metadata.originalFileSha256 = file.sha256;
         result = {
@@ -118,10 +95,6 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
     } else {
       // Route 3: Images -> VLM Route
       route = 'vlm_ocr';
-      log().debug(
-        { route, reason: 'Image document format detected', mime },
-        'Triage routed image document to Gemini VLM'
-      );
       const ast = await extractWithVlm(file.buffer, mime, file.originalName);
       ast.metadata.originalFileSha256 = file.sha256;
       result = {
@@ -162,6 +135,16 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
       'Document extraction failed'
     );
 
-    throw err;
+    if (err instanceof AppError) {
+      throw err;
+    }
+
+    log().error({ err, route, documentId }, 'Unexpected library error during document extraction');
+    throw new AppError(
+      'EXTRACTION_FAILED',
+      `Document extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+      500,
+      false
+    );
   }
 }

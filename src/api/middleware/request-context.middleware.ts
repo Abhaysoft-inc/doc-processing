@@ -36,21 +36,33 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
   };
 
   res.on('finish', () => {
-    const endHr = process.hrtime.bigint();
-    const durationMs = Math.round(Number(endHr - startHr) / 10_000) / 100;
-
     // Strip query string to ensure sensitive values (tokens, secrets, signed URLs) never leak into logs
     const sanitizedPath = (req.originalUrl ? req.originalUrl.split('?')[0] : req.path) || '/';
 
-    childLogger.info(
-      {
-        method: req.method,
-        path: sanitizedPath,
-        status: res.statusCode,
-        durationMs,
-      },
-      `${req.method} ${sanitizedPath} ${res.statusCode} ${durationMs}ms`
-    );
+    // Skip the "request completed" log for /healthz
+    if (sanitizedPath === '/healthz') {
+      return;
+    }
+
+    const endHr = process.hrtime.bigint();
+    const durationMs = Math.round(Number(endHr - startHr) / 10_000) / 100;
+    const status = res.statusCode;
+
+    const payload = {
+      method: req.method,
+      path: sanitizedPath,
+      status,
+      durationMs,
+    };
+    const message = `${req.method} ${sanitizedPath} ${status} ${durationMs}ms`;
+
+    if (status >= 500) {
+      childLogger.error(payload, message);
+    } else if (status >= 400) {
+      childLogger.warn(payload, message);
+    } else {
+      childLogger.info(payload, message);
+    }
   });
 
   requestContext.run(store, () => {

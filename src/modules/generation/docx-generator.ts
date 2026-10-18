@@ -369,16 +369,6 @@ export async function generateDocxBuffer(doc: CanonicalDocument): Promise<Buffer
   const buffer = await Packer.toBuffer(wordDoc);
   const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
 
-  // Per-call detail at DEBUG
-  log().debug(
-    {
-      format: 'docx',
-      durationMs,
-      outputSizeBytes: buffer.length,
-    },
-    'DOCX buffer compiled'
-  );
-
   // One INFO summary per generated document
   log().info(
     {

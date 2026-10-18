@@ -35,8 +35,7 @@ export async function extractFromDocx(
       throw new AppError('CORRUPT_DOCUMENT', 'The DOCX file is corrupt or encrypted.', 422, true);
     }
 
-    log().error({ documentId, stage: 'docx_conversion', err }, 'Mammoth DOCX conversion failed');
-    throw new AppError('EXTRACTION_FAILED', `Failed to extract DOCX: ${errMsg}`, 500, false);
+    throw err;
   }
 
   const title = originalFileName.replace(/\.[^/.]+$/, '');
@@ -140,18 +139,13 @@ export async function extractFromDocx(
 
   // Fallback: If no blocks parsed, extract raw text
   if (blocks.length === 0) {
-    try {
-      const raw = await mammoth.extractRawText({ buffer });
-      const lines = raw.value.split('\n').filter((l) => l.trim().length > 0);
-      for (const line of lines) {
-        blocks.push({
-          type: 'paragraph',
-          runs: [{ text: line.trim() }],
-        });
-      }
-    } catch (rawErr) {
-      log().error({ documentId, stage: 'docx_raw_text', err: rawErr }, 'Mammoth raw text extraction failed');
-      throw new AppError('EXTRACTION_FAILED', 'Failed to extract text from DOCX.', 500, false);
+    const raw = await mammoth.extractRawText({ buffer });
+    const lines = raw.value.split('\n').filter((l) => l.trim().length > 0);
+    for (const line of lines) {
+      blocks.push({
+        type: 'paragraph',
+        runs: [{ text: line.trim() }],
+      });
     }
   }
 
@@ -161,17 +155,6 @@ export async function extractFromDocx(
       blocks,
     },
   ];
-
-  const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-  log().debug(
-    {
-      documentId,
-      stage: 'docx_extraction',
-      durationMs,
-      blockCount: blocks.length,
-    },
-    'DOCX extraction completed'
-  );
 
   return ast;
 }

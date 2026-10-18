@@ -52,99 +52,79 @@ export async function extractFromDigitalPdf(
       throw new AppError('CORRUPT_DOCUMENT', 'The PDF document is corrupt or malformed.', 422, true);
     }
 
-    log().error({ documentId, stage: 'digital_pdf_load', err }, 'Unexpected error opening PDF document');
-    throw new AppError('EXTRACTION_FAILED', `Failed to open PDF document: ${errObj.message || 'Unknown error'}`, 500, false);
+    throw err;
   }
 
   const numPages = pdfDoc.numPages;
   let totalCharacters = 0;
   const blocks: DocumentBlock[] = [];
 
-  try {
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const content = await page.getTextContent();
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdfDoc.getPage(pageNum);
+    const content = await page.getTextContent();
 
-      let currentLine = '';
-      const pageLines: string[] = [];
+    let currentLine = '';
+    const pageLines: string[] = [];
 
-      for (const item of content.items) {
-        if ('str' in item) {
-          const text = (item as { str: string }).str;
-          if (text) {
-            totalCharacters += text.length;
-            currentLine += text + ' ';
-            if ((item as unknown as { hasEOL?: boolean }).hasEOL) {
-              if (currentLine.trim()) {
-                pageLines.push(currentLine.trim());
-              }
-              currentLine = '';
+    for (const item of content.items) {
+      if ('str' in item) {
+        const text = (item as { str: string }).str;
+        if (text) {
+          totalCharacters += text.length;
+          currentLine += text + ' ';
+          if ((item as unknown as { hasEOL?: boolean }).hasEOL) {
+            if (currentLine.trim()) {
+              pageLines.push(currentLine.trim());
             }
+            currentLine = '';
           }
         }
       }
+    }
 
-      if (currentLine.trim()) {
-        pageLines.push(currentLine.trim());
-      }
+    if (currentLine.trim()) {
+      pageLines.push(currentLine.trim());
+    }
 
-      // Process pageLines into paragraphs and headings
-      for (const line of pageLines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+    // Process pageLines into paragraphs and headings
+    for (const line of pageLines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-        // Simple heuristic for headings
-        const isShort = trimmed.length < 80;
-        const startsWithHeadingIndicator =
-          /^(Section|Article|Chapter|\d+\.|\d+\.\d+)\s+/i.test(trimmed);
-        const isAllUpper =
-          trimmed.length > 4 &&
-          trimmed === trimmed.toUpperCase() &&
-          /[A-Z]/.test(trimmed);
+      // Simple heuristic for headings
+      const isShort = trimmed.length < 80;
+      const startsWithHeadingIndicator =
+        /^(Section|Article|Chapter|\d+\.|\d+\.\d+)\s+/i.test(trimmed);
+      const isAllUpper =
+        trimmed.length > 4 &&
+        trimmed === trimmed.toUpperCase() &&
+        /[A-Z]/.test(trimmed);
 
-        if ((startsWithHeadingIndicator || isAllUpper) && isShort) {
-          const headingBlock: HeadingBlock = {
-            type: 'heading',
-            level: startsWithHeadingIndicator ? 2 : 1,
-            text: trimmed,
-          };
-          blocks.push(headingBlock);
-        } else {
-          const pBlock: ParagraphBlock = {
-            type: 'paragraph',
-            runs: [{ text: trimmed }],
-          };
-          blocks.push(pBlock);
-        }
-      }
-
-      // Add page break between pages
-      if (pageNum < numPages) {
-        blocks.push({ type: 'page_break' });
+      if ((startsWithHeadingIndicator || isAllUpper) && isShort) {
+        const headingBlock: HeadingBlock = {
+          type: 'heading',
+          level: startsWithHeadingIndicator ? 2 : 1,
+          text: trimmed,
+        };
+        blocks.push(headingBlock);
+      } else {
+        const pBlock: ParagraphBlock = {
+          type: 'paragraph',
+          runs: [{ text: trimmed }],
+        };
+        blocks.push(pBlock);
       }
     }
-  } catch (extractErr) {
-    log().error({ documentId, stage: 'digital_pdf_parse', err: extractErr }, 'Unexpected error extracting PDF pages');
-    throw new AppError('EXTRACTION_FAILED', 'Failed to extract text streams from PDF.', 500, false);
-  }
 
-  const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
+    // Add page break between pages
+    if (pageNum < numPages) {
+      blocks.push({ type: 'page_break' });
+    }
+  }
 
   // If average characters per page is below 60 chars, it's likely a scanned image or empty
   const avgCharsPerPage = totalCharacters / (numPages || 1);
   const isDigital = totalCharacters > 50 && avgCharsPerPage > 40;
-
-  log().debug(
-    {
-      documentId,
-      stage: 'digital_pdf_inspection',
-      durationMs,
-      pages: numPages,
-      isDigital,
-      totalCharacters,
-    },
-    'Completed digital PDF stream inspection'
-  );
 
   if (!isDigital) {
     return {

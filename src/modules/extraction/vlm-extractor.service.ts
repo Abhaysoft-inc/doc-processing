@@ -129,10 +129,10 @@ Return only valid, parseable JSON without commentary.`;
       };
 
   let rawOutput = '';
-  const MAX_RETRIES = 3;
   let lastError: unknown = null;
+  const RETRY_DELAY_MS = 1000;
 
-  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const signal = AbortSignal.timeout(60000); // 60s timeout per call
 
     try {
@@ -162,19 +162,16 @@ Return only valid, parseable JSON without commentary.`;
       lastError = err;
       const isTransient = isTransientError(err);
 
-      if (attempt <= MAX_RETRIES && isTransient) {
-        const delayMs = Math.pow(2, attempt - 1) * 1000;
+      if (attempt === 1 && isTransient) {
         log().warn(
           {
             documentId,
             attempt,
-            maxRetries: MAX_RETRIES,
-            delayMs,
             error: err instanceof Error ? err.message : String(err),
           },
-          'Transient VLM failure encountered, retrying with exponential backoff'
+          'Transient VLM failure encountered, retrying once after fixed delay'
         );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         continue;
       }
 
@@ -184,9 +181,7 @@ Return only valid, parseable JSON without commentary.`;
   }
 
   if (lastError || !rawOutput) {
-    const errMsg = lastError instanceof Error ? lastError.message : String(lastError || 'Empty VLM output');
-    log().error({ documentId, stage: 'vlm_call', err: lastError }, 'Gemini VLM API call failed');
-    throw new AppError('EXTRACTION_FAILED', `Gemini VLM extraction failed: ${errMsg}`, 500, false);
+    throw (lastError instanceof Error ? lastError : new Error(String(lastError || 'Empty VLM output')));
   }
 
   // Parse JSON from output
@@ -280,16 +275,6 @@ Return only valid, parseable JSON without commentary.`;
       footnoteIndex: i + 1,
     }));
   }
-
-  const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-  log().debug(
-    {
-      documentId,
-      stage: 'vlm_extraction',
-      durationMs,
-    },
-    'Gemini VLM extraction completed'
-  );
 
   return ast;
 }

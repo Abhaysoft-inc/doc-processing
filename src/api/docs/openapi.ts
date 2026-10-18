@@ -31,10 +31,6 @@ export const errorResponseSchema = z
         description: 'Unique correlation ID for tracing across request lifecycle and logs',
         example: 'd8e4ef9a-41d7-498b-a481-9f2dcadbf3e1',
       }),
-      stack: z.string().optional().openapi({
-        description: 'Stack trace for debugging (gated by NODE_ENV !== "production")',
-        example: 'Error: File too large\n    at validateUploadedFile (file-validator.ts:32:11)...',
-      }),
     }),
   })
   .openapi('ErrorResponse');

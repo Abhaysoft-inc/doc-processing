@@ -72,17 +72,6 @@ export async function uploadBufferToS3(
 
     await s3.send(command, { abortSignal: AbortSignal.timeout(30000) });
 
-    const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-
-    log().debug(
-      {
-        key,
-        sizeBytes: buffer.length,
-        durationMs,
-      },
-      'S3 object upload completed'
-    );
-
     const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
     return { s3Url, key };
   } catch (err: unknown) {
@@ -99,13 +88,12 @@ export async function uploadBufferToS3(
 
 /**
  * Creates a presigned download URL with a specific time-to-live.
- * Logs key and duration at DEBUG, but NEVER logs the presigned URL.
+ * Never logs presigned URLs.
  */
 export async function createPresignedDownloadUrl(
   key: string,
   expiresInSeconds = 3600
 ): Promise<string> {
-  const startHr = process.hrtime.bigint();
   const { bucketName } = config.aws;
   const s3 = getS3Client();
 
@@ -119,16 +107,6 @@ export async function createPresignedDownloadUrl(
       expiresIn: expiresInSeconds,
     });
 
-    const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-    log().debug(
-      {
-        key,
-        expiresInSeconds,
-        durationMs,
-      },
-      'Created S3 presigned download URL'
-    );
-
     return signedUrl;
   } catch (err: unknown) {
     log().error({ key, err }, 'Unexpected error generating presigned download URL');
@@ -138,7 +116,7 @@ export async function createPresignedDownloadUrl(
 
 /**
  * Generates a presigned upload URL for direct browser/client-to-S3 uploads.
- * Logs key and duration at DEBUG, but NEVER logs the presigned upload URL.
+ * Never logs presigned upload URLs.
  */
 export async function createPresignedUploadUrl(
   filename: string,
@@ -147,7 +125,6 @@ export async function createPresignedUploadUrl(
   tenantId = 'default',
   docId = crypto.randomUUID()
 ): Promise<{ uploadUrl: string; key: string }> {
-  const startHr = process.hrtime.bigint();
   const { bucketName } = config.aws;
   const s3 = getS3Client();
 
@@ -163,16 +140,6 @@ export async function createPresignedUploadUrl(
     const uploadUrl = await getSignedUrl(s3, command, {
       expiresIn: expiresInSeconds,
     });
-
-    const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-    log().debug(
-      {
-        key,
-        expiresInSeconds,
-        durationMs,
-      },
-      'Created S3 presigned upload URL'
-    );
 
     return { uploadUrl, key };
   } catch (err: unknown) {

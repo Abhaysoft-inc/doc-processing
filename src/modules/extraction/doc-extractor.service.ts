@@ -41,8 +41,7 @@ export async function extractFromDoc(
       throw new AppError('CORRUPT_DOCUMENT', 'The legacy DOC file is corrupt or encrypted.', 422, true);
     }
 
-    log().error({ documentId, stage: 'doc_extraction', err }, 'WordExtractor DOC extraction failed');
-    throw new AppError('EXTRACTION_FAILED', `Failed to extract legacy DOC: ${errMsg}`, 500, false);
+    throw err;
   }
 
   const bodyText = extractedDoc.getBody() || '';
@@ -199,17 +198,6 @@ export async function extractFromDoc(
       blocks,
     },
   ];
-
-  const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
-  log().debug(
-    {
-      documentId,
-      stage: 'doc_extraction',
-      durationMs,
-      blockCount: blocks.length,
-    },
-    'Legacy DOC extraction completed'
-  );
 
   return ast;
 }
