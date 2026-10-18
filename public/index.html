@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document Processing</title>
+  <title>Enterprise Document Processing & Generation</title>
   <style>
     * {
       box-sizing: border-box;
@@ -20,7 +20,7 @@
     }
 
     .container {
-      max-width: 760px;
+      max-width: 880px;
       margin: 0 auto;
     }
 
@@ -28,18 +28,66 @@
       margin-bottom: 2rem;
       border-bottom: 1px solid #262626;
       padding-bottom: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
-    h1 {
-      font-size: 1.25rem;
+    .header-title h1 {
+      font-size: 1.35rem;
       font-weight: 600;
       color: #ffffff;
     }
 
-    p.subtitle {
+    .header-title p.subtitle {
       font-size: 0.875rem;
       color: #737373;
       margin-top: 0.25rem;
+    }
+
+    .server-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-family: ui-monospace, monospace;
+      border: 1px solid #333333;
+      background: #141414;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .server-status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #737373;
+    }
+
+    .server-status.online {
+      border-color: #065f46;
+      background: #062b20;
+      color: #6ee7b7;
+    }
+
+    .server-status.online .dot {
+      background: #10b981;
+      box-shadow: 0 0 6px #10b981;
+    }
+
+    .server-status.offline {
+      border-color: #7f1d1d;
+      background: #2a1215;
+      color: #fca5a5;
+    }
+
+    .server-status.offline .dot {
+      background: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
     }
 
     .form-group {
@@ -48,16 +96,17 @@
 
     .dropzone {
       border: 1px dashed #333333;
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 2.5rem 1.5rem;
       text-align: center;
       background-color: #141414;
       cursor: pointer;
-      transition: border-color 0.15s ease;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
     }
 
     .dropzone:hover, .dropzone.dragover {
       border-color: #666666;
+      background-color: #1a1a1a;
     }
 
     .dropzone p {
@@ -103,13 +152,13 @@
     button.btn-submit {
       width: 100%;
       margin-top: 1rem;
-      padding: 0.75rem;
+      padding: 0.85rem;
       background-color: #ffffff;
       color: #000000;
       border: none;
       border-radius: 6px;
       font-size: 0.875rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
       transition: opacity 0.15s ease;
     }
@@ -206,48 +255,56 @@
       padding-top: 1.5rem;
     }
 
-    .result-header {
+    .actions-bar {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.75rem;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
     }
 
-    .result-title {
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: #ffffff;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .btn-copy {
-      background: #171717;
+    .btn-action {
+      background: #1e1e1e;
       border: 1px solid #333333;
       color: #e5e5e5;
-      padding: 0.35rem 0.75rem;
-      border-radius: 4px;
-      font-size: 0.75rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 500;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
     }
 
-    .btn-copy:hover {
-      background: #262626;
+    .btn-action:hover {
+      background: #2a2a2a;
+      border-color: #555555;
+    }
+
+    .btn-action.btn-primary {
+      background: #2563eb;
+      border-color: #1d4ed8;
+      color: #ffffff;
+    }
+
+    .btn-action.btn-primary:hover {
+      background: #1d4ed8;
     }
 
     .meta-box {
       background: #141414;
       border: 1px solid #262626;
       border-radius: 6px;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1rem;
       font-size: 0.8125rem;
-      margin-bottom: 1rem;
+      margin-bottom: 1.25rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
     .meta-row {
       display: flex;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.35rem;
     }
 
     .meta-row:last-child {
@@ -256,7 +313,7 @@
 
     .meta-label {
       color: #737373;
-      width: 110px;
+      width: 140px;
       flex-shrink: 0;
     }
 
@@ -265,9 +322,53 @@
       word-break: break-all;
     }
 
-    .meta-value a {
-      color: #e5e5e5;
-      text-decoration: underline;
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-digital {
+      background: #064e3b;
+      color: #6ee7b7;
+    }
+
+    .badge-vlm {
+      background: #312e81;
+      color: #c7d2fe;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid #262626;
+      margin-bottom: 1rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: #737373;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tab-btn.active {
+      color: #ffffff;
+      border-bottom-color: #ffffff;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
 
     pre.output-box {
@@ -276,22 +377,41 @@
       border-radius: 6px;
       padding: 1rem;
       color: #f5f5f5;
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.6;
+      line-height: 1.5;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    .preview-frame {
+      width: 100%;
+      height: 500px;
+      background: #ffffff;
+      border: 1px solid #262626;
+      border-radius: 6px;
     }
 
     .error-box {
       display: none;
       margin-top: 1rem;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1rem;
       background: #1c1012;
       border: 1px solid #4a171d;
       border-radius: 6px;
       color: #f87171;
       font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .error-box code {
+      background: #2a1518;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8125rem;
     }
   </style>
 </head>
@@ -299,14 +419,20 @@
 
   <div class="container">
     <header>
-      <h1>Document Processing</h1>
-      <p class="subtitle">Upload a PDF, DOCX, or Image file to extract document data.</p>
+      <div class="header-title">
+        <h1>Document Processing & Export Service</h1>
+        <p class="subtitle">Magic Byte Ingestion • Deterministic Triage • Canonical Document AST • DOCX & PDF Engine</p>
+      </div>
+      <div class="server-status" id="serverStatus" title="Click to test or configure Backend URL">
+        <span class="dot"></span>
+        <span id="serverStatusText">Checking Backend...</span>
+      </div>
     </header>
 
     <div class="form-group">
       <div class="dropzone" id="dropzone">
         <p>Click or drag a file to upload</p>
-        <span>Supports PDF, DOCX, PNG, JPG, WEBP (Max 20MB)</span>
+        <span>Supports PDF, DOCX, DOC, PNG, JPG, WEBP (Max 20MB)</span>
       </div>
       <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp,.gif,.tiff,.tif">
 
@@ -321,15 +447,19 @@
       <div class="steps-progress" id="stepsProgress">
         <div class="step-item" id="stepValidation">
           <div class="step-indicator">1</div>
-          <span>Format & Size Validation</span>
+          <span>Magic Byte & SHA-256 Checksum Validation</span>
         </div>
         <div class="step-item" id="stepS3">
           <div class="step-indicator">2</div>
-          <span>AWS S3 Upload</span>
+          <span>AWS S3 Partitioned Storage</span>
         </div>
-        <div class="step-item" id="stepVLM">
+        <div class="step-item" id="stepTriage">
           <div class="step-indicator">3</div>
-          <span>Gemini VLM Extraction</span>
+          <span>Dual-Route Ingestion & Extraction</span>
+        </div>
+        <div class="step-item" id="stepAST">
+          <div class="step-indicator">4</div>
+          <span>Canonical Document AST Structuring</span>
         </div>
       </div>
 
@@ -337,9 +467,20 @@
     </div>
 
     <div class="result-section" id="resultSection">
-      <div class="result-header">
-        <span class="result-title">Extracted Output</span>
-        <button type="button" class="btn-copy" id="btnCopy">Copy</button>
+      <!-- Actions Bar -->
+      <div class="actions-bar">
+        <button type="button" class="btn-action btn-primary" id="btnDownloadDocx">
+          📄 Download DOCX
+        </button>
+        <button type="button" class="btn-action btn-primary" id="btnDownloadPdf">
+          📑 Download PDF
+        </button>
+        <button type="button" class="btn-action" id="btnGenerateAll">
+          ☁️ Store Both in S3
+        </button>
+        <button type="button" class="btn-action" id="btnCopyJson">
+          📋 Copy AST JSON
+        </button>
       </div>
 
       <div class="meta-box" id="metaBox">
@@ -348,20 +489,92 @@
           <span class="meta-value" id="resJobId">-</span>
         </div>
         <div class="meta-row">
-          <span class="meta-label">File:</span>
+          <span class="meta-label">File Name:</span>
           <span class="meta-value" id="resFileName">-</span>
         </div>
         <div class="meta-row">
-          <span class="meta-label">S3 URL:</span>
+          <span class="meta-label">MIME Type:</span>
+          <span class="meta-value" id="resMime">-</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">SHA-256 Hash:</span>
+          <span class="meta-value" id="resSha256">-</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Extraction Route:</span>
+          <span class="meta-value" id="resRoute">-</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">S3 Location:</span>
           <span class="meta-value" id="resS3Location">-</span>
         </div>
       </div>
 
-      <pre class="output-box" id="outputContent"></pre>
+      <!-- Tabs Navigation -->
+      <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="tabAst">Canonical AST (JSON)</button>
+        <button type="button" class="tab-btn" data-tab="tabPreview">HTML Preview</button>
+      </div>
+
+      <div class="tab-content active" id="tabAst">
+        <pre class="output-box" id="outputAst"></pre>
+      </div>
+
+      <div class="tab-content" id="tabPreview">
+        <iframe class="preview-frame" id="previewFrame"></iframe>
+      </div>
     </div>
   </div>
 
   <script>
+    // --- Backend API Base Configuration ---
+    // If running on a different port (e.g. VS Code Live Server on :5500), automatically route to Express on :3000
+    function getApiBase() {
+      const stored = localStorage.getItem('docp_backend_url');
+      if (stored) return stored;
+      // If we are served from port 3000, use relative path ''; otherwise default to http://localhost:3000
+      return window.location.port === '3000' ? '' : 'http://localhost:3000';
+    }
+
+    function apiUrl(path) {
+      const base = getApiBase();
+      return `${base}${path}`;
+    }
+
+    const serverStatus = document.getElementById('serverStatus');
+    const serverStatusText = document.getElementById('serverStatusText');
+
+    async function checkBackendHealth() {
+      try {
+        serverStatusText.textContent = 'Connecting...';
+        const res = await fetch(apiUrl('/health'), { method: 'GET', signal: AbortSignal.timeout(3000) });
+        if (res.ok) {
+          const data = await res.json();
+          serverStatus.className = 'server-status online';
+          serverStatusText.textContent = `Backend Online (${getApiBase() || 'port 3000'})`;
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (e) {
+        serverStatus.className = 'server-status offline';
+        const target = getApiBase() || 'http://localhost:3000';
+        serverStatusText.textContent = `Backend Offline (${target})`;
+      }
+    }
+
+    serverStatus.addEventListener('click', () => {
+      const current = getApiBase();
+      const next = prompt('Configure Backend API URL (default is http://localhost:3000):', current || 'http://localhost:3000');
+      if (next !== null) {
+        localStorage.setItem('docp_backend_url', next.trim());
+        checkBackendHealth();
+      }
+    });
+
+    // Check backend health on load
+    checkBackendHealth();
+
+    // --- DOM Elements ---
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
     const fileSelected = document.getElementById('fileSelected');
@@ -371,16 +584,27 @@
     const stepsProgress = document.getElementById('stepsProgress');
     const stepValidation = document.getElementById('stepValidation');
     const stepS3 = document.getElementById('stepS3');
-    const stepVLM = document.getElementById('stepVLM');
+    const stepTriage = document.getElementById('stepTriage');
+    const stepAST = document.getElementById('stepAST');
     const errorBox = document.getElementById('errorBox');
     const resultSection = document.getElementById('resultSection');
+
     const resJobId = document.getElementById('resJobId');
     const resFileName = document.getElementById('resFileName');
+    const resMime = document.getElementById('resMime');
+    const resSha256 = document.getElementById('resSha256');
+    const resRoute = document.getElementById('resRoute');
     const resS3Location = document.getElementById('resS3Location');
-    const outputContent = document.getElementById('outputContent');
-    const btnCopy = document.getElementById('btnCopy');
+    const outputAst = document.getElementById('outputAst');
+    const previewFrame = document.getElementById('previewFrame');
+
+    const btnDownloadDocx = document.getElementById('btnDownloadDocx');
+    const btnDownloadPdf = document.getElementById('btnDownloadPdf');
+    const btnGenerateAll = document.getElementById('btnGenerateAll');
+    const btnCopyJson = document.getElementById('btnCopyJson');
 
     let currentFile = null;
+    let currentAst = null;
 
     dropzone.addEventListener('click', () => fileInput.click());
 
@@ -410,9 +634,7 @@
       }
     });
 
-    btnRemove.addEventListener('click', () => {
-      clearFile();
-    });
+    btnRemove.addEventListener('click', () => clearFile());
 
     function setFile(file) {
       currentFile = file;
@@ -426,6 +648,7 @@
 
     function clearFile() {
       currentFile = null;
+      currentAst = null;
       fileInput.value = '';
       dropzone.style.display = 'block';
       fileSelected.style.display = 'none';
@@ -439,7 +662,8 @@
       stepsProgress.style.display = 'none';
       setStep(stepValidation, '', '1');
       setStep(stepS3, '', '2');
-      setStep(stepVLM, '', '3');
+      setStep(stepTriage, '', '3');
+      setStep(stepAST, '', '4');
     }
 
     function setStep(stepEl, status, defaultNum) {
@@ -456,13 +680,13 @@
       }
     }
 
-    function showError(msg) {
-      errorBox.textContent = msg;
+    function showError(htmlOrMsg) {
+      errorBox.innerHTML = htmlOrMsg;
       errorBox.style.display = 'block';
     }
 
     function hideError() {
-      errorBox.textContent = '';
+      errorBox.innerHTML = '';
       errorBox.style.display = 'none';
     }
 
@@ -470,45 +694,83 @@
       if (!currentFile) return;
 
       btnSubmit.disabled = true;
-      btnSubmit.textContent = 'Processing...';
+      btnSubmit.textContent = 'Processing Document...';
       hideError();
       resultSection.style.display = 'none';
 
       // Show steps progress
       stepsProgress.style.display = 'flex';
-      setStep(stepValidation, 'completed', '1');
-      setStep(stepS3, 'active', '2');
-      setStep(stepVLM, 'active', '3');
+      setStep(stepValidation, 'active', '1');
+      setStep(stepS3, '', '2');
+      setStep(stepTriage, '', '3');
+      setStep(stepAST, '', '4');
 
       const formData = new FormData();
       formData.append('file', currentFile);
 
       try {
-        const response = await fetch('/api/docs/process', {
-          method: 'POST',
-          body: formData,
-        });
+        setStep(stepValidation, 'completed', '1');
+        setStep(stepS3, 'active', '2');
 
-        const data = await response.json();
+        const targetUrl = apiUrl('/api/documents/process');
+        let response;
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Processing failed');
+        try {
+          response = await fetch(targetUrl, {
+            method: 'POST',
+            body: formData,
+          });
+        } catch (fetchErr) {
+          throw new Error(
+            `Unable to connect to the backend server at <code>${targetUrl}</code>.<br><br>` +
+            `👉 <strong>Solution:</strong> Open your terminal and run <code>npm run dev</code> to start the backend on port 3000.`
+          );
         }
 
-        // All steps succeeded
-        setStep(stepValidation, 'completed', '1');
+        // Safely parse body
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          if (response.status === 405) {
+            throw new Error(
+              `<strong>405 Method Not Allowed</strong>: The upload request was sent to a static file server (<code>${targetUrl}</code>).<br><br>` +
+              `👉 <strong>Solution:</strong> If you are using VS Code Live Server on port 5500, please start the backend with <code>npm run dev</code> and open <a href="http://localhost:3000" style="color: #60a5fa;" target="_blank">http://localhost:3000</a> directly.`
+            );
+          }
+          throw new Error(`Server returned status ${response.status}: ${responseText || response.statusText}`);
+        }
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Document processing failed.');
+        }
+
         setStep(stepS3, 'completed', '2');
-        setStep(stepVLM, 'completed', '3');
+        setStep(stepTriage, 'completed', '3');
+        setStep(stepAST, 'completed', '4');
+
+        currentAst = data.data.ast;
 
         resJobId.textContent = data.jobId;
         resFileName.textContent = `${data.data.originalName} (${(data.data.sizeBytes / 1024).toFixed(1)} KB)`;
+        resMime.textContent = data.data.detectedMimeType;
+        resSha256.textContent = data.data.sha256;
+
+        const isDigital = data.data.routeTaken && data.data.routeTaken.startsWith('digital');
+        resRoute.innerHTML = `<span class="badge ${isDigital ? 'badge-digital' : 'badge-vlm'}">${data.data.routeTaken || 'completed'}</span>`;
+
         resS3Location.innerHTML = `<a href="${data.data.s3Location}" target="_blank" rel="noopener noreferrer">${data.data.s3Location}</a>`;
-        outputContent.textContent = data.data.extractedInfo;
+
+        outputAst.textContent = JSON.stringify(currentAst, null, 2);
+
+        // Update preview iframe
+        renderPreview(currentAst);
 
         resultSection.style.display = 'block';
       } catch (err) {
-        setStep(stepS3, 'failed', '2');
-        setStep(stepVLM, 'failed', '3');
+        setStep(stepTriage, 'failed', '3');
+        setStep(stepAST, 'failed', '4');
         showError(err.message || 'An error occurred during processing.');
       } finally {
         btnSubmit.disabled = false;
@@ -516,15 +778,151 @@
       }
     });
 
-    btnCopy.addEventListener('click', () => {
-      if (!outputContent.textContent) return;
-      navigator.clipboard.writeText(outputContent.textContent).then(() => {
-        btnCopy.textContent = 'Copied';
-        setTimeout(() => {
-          btnCopy.textContent = 'Copy';
-        }, 1500);
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
       });
     });
+
+    // DOCX download handler
+    btnDownloadDocx.addEventListener('click', async () => {
+      if (!currentAst) return;
+      btnDownloadDocx.textContent = 'Generating DOCX...';
+      try {
+        const res = await fetch(apiUrl('/api/documents/generate/docx'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ast: currentAst }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to generate DOCX: ${errText}`);
+        }
+        const blob = await res.blob();
+        downloadBlob(blob, `${(currentAst.title || 'document')}.docx`);
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnDownloadDocx.textContent = '📄 Download DOCX';
+      }
+    });
+
+    // PDF download handler
+    btnDownloadPdf.addEventListener('click', async () => {
+      if (!currentAst) return;
+      btnDownloadPdf.textContent = 'Generating PDF...';
+      try {
+        const res = await fetch(apiUrl('/api/documents/generate/pdf'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ast: currentAst }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to generate PDF: ${errText}`);
+        }
+        const blob = await res.blob();
+        downloadBlob(blob, `${(currentAst.title || 'document')}.pdf`);
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnDownloadPdf.textContent = '📑 Download PDF';
+      }
+    });
+
+    // S3 store both handler
+    btnGenerateAll.addEventListener('click', async () => {
+      if (!currentAst) return;
+      btnGenerateAll.textContent = 'Uploading both to S3...';
+      try {
+        const res = await fetch(apiUrl('/api/documents/generate/all'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ast: currentAst }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed');
+        alert(`Generated and stored successfully!\nDOCX: ${data.data.docx.s3Location}\nPDF: ${data.data.pdf.s3Location}`);
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnGenerateAll.textContent = '☁️ Store Both in S3';
+      }
+    });
+
+    // Copy AST JSON
+    btnCopyJson.addEventListener('click', () => {
+      if (!outputAst.textContent) return;
+      navigator.clipboard.writeText(outputAst.textContent).then(() => {
+        btnCopyJson.textContent = 'Copied!';
+        setTimeout(() => { btnCopyJson.textContent = '📋 Copy AST JSON'; }, 1500);
+      });
+    });
+
+    function downloadBlob(blob, filename) {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }
+
+    function renderPreview(ast) {
+      let docHtml = '<div style="font-family: sans-serif; padding: 20px; color: #111;">';
+      docHtml += `<h1 style="border-bottom: 1px solid #ccc; padding-bottom: 8px;">${escapeHtml(ast.title)}</h1>`;
+      
+      for (const sec of ast.sections) {
+        if (sec.title) docHtml += `<h2>${escapeHtml(sec.title)}</h2>`;
+        for (const block of sec.blocks) {
+          if (block.type === 'heading') {
+            docHtml += `<h${block.level}>${escapeHtml(block.text)}</h${block.level}>`;
+          } else if (block.type === 'paragraph') {
+            const pRuns = block.runs.map(r => {
+              let t = escapeHtml(r.text);
+              if (r.bold) t = `<strong>${t}</strong>`;
+              if (r.italic) t = `<em>${t}</em>`;
+              if (r.underline) t = `<u>${t}</u>`;
+              return t;
+            }).join('');
+            docHtml += `<p style="margin: 8px 0; line-height: 1.5;">${pRuns}</p>`;
+          } else if (block.type === 'table') {
+            docHtml += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; margin: 12px 0;">';
+            if (block.headerRows?.length) {
+              docHtml += '<thead style="background: #eee;">';
+              for (const r of block.headerRows) {
+                docHtml += '<tr>' + r.cells.map(c => `<th>${escapeHtml(c.runs.map(x=>x.text).join(''))}</th>`).join('') + '</tr>';
+              }
+              docHtml += '</thead>';
+            }
+            if (block.bodyRows?.length) {
+              docHtml += '<tbody>';
+              for (const r of block.bodyRows) {
+                docHtml += '<tr>' + r.cells.map(c => `<td>${escapeHtml(c.runs.map(x=>x.text).join(''))}</td>`).join('') + '</tr>';
+              }
+              docHtml += '</tbody>';
+            }
+            docHtml += '</table>';
+          }
+        }
+      }
+
+      docHtml += '</div>';
+      previewFrame.srcdoc = docHtml;
+    }
+
+    function escapeHtml(str) {
+      return (str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
   </script>
 </body>
 </html>
