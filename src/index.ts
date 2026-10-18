@@ -47,7 +47,7 @@ app.get('/openapi.json', (req, res) => {
   res.json(openApiDocument);
 });
 
-// Business routes
+// document processing routes
 app.use('/api/documents', documentRouter);
 
 app.use(errorHandlerMiddleware);

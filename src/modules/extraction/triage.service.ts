@@ -85,17 +85,32 @@ export async function triageAndExtract(file: ValidatedFile): Promise<ExtractionT
         };
       } else {
         route = 'vlm_ocr';
-        const ast = await extractWithVlm(file.buffer, mime, file.originalName);
+        log().info(
+          {
+            originalName: file.originalName,
+            pages: digitalResult.pageCount,
+            totalChars: digitalResult.totalCharacters,
+            reason: digitalResult.nonDigitalReason,
+          },
+          'PDF contains scanned/hybrid pages or insufficient digital text, routing to VLM OCR'
+        );
+        const ast = await extractWithVlm(
+          file.buffer,
+          mime,
+          file.originalName,
+          digitalResult.pageCount
+        );
         ast.metadata.originalFileSha256 = file.sha256;
         result = {
           ast,
           routeTaken: 'vlm_ocr',
+          pageCount: digitalResult.pageCount,
         };
       }
     } else {
       // Route 3: Images -> VLM Route
       route = 'vlm_ocr';
-      const ast = await extractWithVlm(file.buffer, mime, file.originalName);
+      const ast = await extractWithVlm(file.buffer, mime, file.originalName, 1);
       ast.metadata.originalFileSha256 = file.sha256;
       result = {
         ast,

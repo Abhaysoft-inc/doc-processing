@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import crypto from 'crypto';
 import { fileTypeFromBuffer } from 'file-type';
 import { config } from '../../config/index.js';
@@ -11,6 +12,7 @@ export interface ValidatedFile {
   detectedExtension: string;
   sizeBytes: number;
   sha256: string;
+  filePath?: string;
 }
 
 export const ALLOWED_MIME_TYPES = new Set([
@@ -28,28 +30,36 @@ export const ALLOWED_MIME_TYPES = new Set([
 
 /**
  * Validates a file by inspecting magic bytes, computing SHA-256 hash, and checking size constraints.
+ * Supports both memory buffers and disk-stored temporary files.
  */
 export async function validateUploadedFile(
   file: Express.Multer.File,
   clientSha256?: string
 ): Promise<ValidatedFile> {
-  if (!file || !file.buffer || file.buffer.length === 0) {
+  const fileSize = file?.size ?? file?.buffer?.length ?? 0;
+  if (!file || (fileSize === 0 && !file.path && !file.buffer)) {
     throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
   }
 
   // 1. Size constraint check
   const maxBytes = config.maxFileSizeMb * 1024 * 1024;
-  if (file.buffer.length > maxBytes) {
+  if (fileSize > maxBytes) {
     throw new AppError(
       'FILE_TOO_LARGE',
-      `File size (${(file.buffer.length / 1024 / 1024).toFixed(2)} MB) exceeds configured limit of ${config.maxFileSizeMb} MB.`,
+      `File size (${(fileSize / 1024 / 1024).toFixed(2)} MB) exceeds configured limit of ${config.maxFileSizeMb} MB.`,
       413,
       true
     );
   }
 
+  // Read buffer from memory or disk
+  const buffer = file.buffer || (file.path ? await fs.promises.readFile(file.path) : undefined);
+  if (!buffer || buffer.length === 0) {
+    throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
+  }
+
   // 2. Compute SHA-256 hash
-  const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
   // Verify client-provided checksum if present
   if (clientSha256 && clientSha256.toLowerCase() !== sha256.toLowerCase()) {
@@ -62,38 +72,38 @@ export async function validateUploadedFile(
   }
 
   // 3. Inspect magic bytes using file-type and header signatures
-  const detectedType = await fileTypeFromBuffer(file.buffer);
+  const detectedType = await fileTypeFromBuffer(buffer);
 
   let detectedMimeType = '';
   let detectedExtension = '';
 
   // Special handling for PDF magic bytes (%PDF-)
   const isPdfHeader =
-    file.buffer.length >= 4 &&
-    file.buffer[0] === 0x25 &&
-    file.buffer[1] === 0x50 &&
-    file.buffer[2] === 0x44 &&
-    file.buffer[3] === 0x46;
+    buffer.length >= 4 &&
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46;
 
   // Special handling for DOCX (standard OOXML is a PK Zip archive)
   const isZipHeader =
-    file.buffer.length >= 4 &&
-    file.buffer[0] === 0x50 &&
-    file.buffer[1] === 0x4b &&
-    file.buffer[2] === 0x03 &&
-    file.buffer[3] === 0x04;
+    buffer.length >= 4 &&
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    buffer[2] === 0x03 &&
+    buffer[3] === 0x04;
 
   // Special handling for legacy DOC (Compound File Binary Format / CFBF: D0 CF 11 E0 A1 B1 1A E1)
   const isDocHeader =
-    file.buffer.length >= 8 &&
-    file.buffer[0] === 0xd0 &&
-    file.buffer[1] === 0xcf &&
-    file.buffer[2] === 0x11 &&
-    file.buffer[3] === 0xe0 &&
-    file.buffer[4] === 0xa1 &&
-    file.buffer[5] === 0xb1 &&
-    file.buffer[6] === 0x1a &&
-    file.buffer[7] === 0xe1;
+    buffer.length >= 8 &&
+    buffer[0] === 0xd0 &&
+    buffer[1] === 0xcf &&
+    buffer[2] === 0x11 &&
+    buffer[3] === 0xe0 &&
+    buffer[4] === 0xa1 &&
+    buffer[5] === 0xb1 &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0xe1;
 
   const originalLower = file.originalname.toLowerCase();
 
@@ -133,17 +143,18 @@ export async function validateUploadedFile(
   log().debug(
     {
       mimeType: detectedMimeType,
-      sizeBytes: file.buffer.length,
+      sizeBytes: buffer.length,
     },
     'File validation passed'
   );
 
   return {
-    buffer: file.buffer,
+    buffer,
     originalName: file.originalname,
     detectedMimeType,
     detectedExtension,
-    sizeBytes: file.buffer.length,
+    sizeBytes: buffer.length,
     sha256,
+    filePath: file.path,
   };
 }

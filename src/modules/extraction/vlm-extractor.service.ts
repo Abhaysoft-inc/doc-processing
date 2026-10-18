@@ -63,7 +63,8 @@ function isTransientError(err: unknown): boolean {
 export async function extractWithVlm(
   fileBuffer: Buffer,
   mimeType: string,
-  originalFileName: string
+  originalFileName: string,
+  pageCount?: number
 ): Promise<CanonicalDocument> {
   const startHr = process.hrtime.bigint();
   const documentId = crypto.randomUUID();
@@ -88,8 +89,19 @@ export async function extractWithVlm(
 
   const ai = new GoogleGenAI({ apiKey: config.gemini.apiKey });
 
-  const prompt = `You are a high-accuracy document extraction specialist.
-Analyze this document thoroughly and extract its complete content and structure.
+  const pageInstruction =
+    pageCount && pageCount > 1
+      ? `This document contains ${pageCount} pages.
+CRITICAL OCR & MULTI-PAGE EXTRACTION REQUIREMENTS:
+1. You MUST process and extract all content from ALL ${pageCount} pages (Page 1 through Page ${pageCount}).
+2. Do NOT stop after page 1 or 2. Many pages in this document are scanned images or exhibits without selectable digital text; you MUST perform optical character recognition (OCR) on EVERY scanned page.
+3. Organize the output into sections corresponding to each page or major document division (e.g. "Section 1 - Page 1", "Section 2 - Page 2", ..., "Section ${pageCount} - Page ${pageCount}").
+4. Never omit, truncate, or summarize pages. Extract all text, numbers, and tables verbatim.`
+      : `Extract all text, headings, and tables from this document verbatim without omitting content.`;
+
+  const prompt = `You are a high-accuracy document extraction and OCR specialist.
+${pageInstruction}
+
 Respond with pure JSON conforming to this schema:
 {
   "title": "Document Title",
@@ -116,18 +128,6 @@ Return only valid, parseable JSON without commentary.`;
 
   const base64Data = fileBuffer.toString('base64');
 
-  const inputItem = isPdf
-    ? {
-        type: 'document' as const,
-        mime_type: 'application/pdf',
-        data: base64Data,
-      }
-    : {
-        type: 'image' as const,
-        mime_type: mimeType,
-        data: base64Data,
-      };
-
   let rawOutput = '';
   let lastError: unknown = null;
   const RETRY_DELAY_MS = 1000;
@@ -142,20 +142,35 @@ Return only valid, parseable JSON without commentary.`;
         });
       });
 
-      const interactionPromise = ai.interactions.create({
+      const contentPromise = ai.models.generateContent({
         model: config.gemini.model,
-        input: [
-          { type: 'text', text: prompt },
-          inputItem,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: isPdf ? 'application/pdf' : mimeType,
+                  data: base64Data,
+                },
+              },
+            ],
+          },
         ],
+        config: {
+          maxOutputTokens: 8192,
+          temperature: 0,
+          responseMimeType: 'application/json',
+        },
       });
 
-      const interaction = (await Promise.race([
-        interactionPromise,
+      const response = (await Promise.race([
+        contentPromise,
         timeoutPromise,
-      ])) as { output_text?: string };
+      ])) as { text?: string };
 
-      rawOutput = interaction.output_text || '';
+      rawOutput = response.text || '';
       lastError = null;
       break; // Successful completion
     } catch (err: unknown) {

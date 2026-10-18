@@ -9,10 +9,19 @@ import {
 } from './document.controller.js';
 import { config } from '../config/index.js';
 
+import os from 'node:os';
+import crypto from 'node:crypto';
+
 const router = Router();
 
-// Memory storage keeps file buffers accessible for direct magic byte check, S3 upload & parsing
-const storage = multer.memoryStorage();
+// Disk storage streams incoming files directly to ephemeral temp directory, preventing OOM under high concurrency
+const storage = multer.diskStorage({
+  destination: os.tmpdir(),
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `doc-${Date.now()}-${crypto.randomUUID()}-${safeName}`);
+  },
+});
 
 const upload = multer({
   storage,

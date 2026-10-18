@@ -57,7 +57,6 @@ export const processDocumentRequestSchema = z
 export const processHeadersSchema = z.object({
   'x-file-sha256': z.string().optional().openapi({
     description: 'Optional expected SHA-256 hex digest of the file for integrity validation',
-    example: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
   }),
 });
 
@@ -75,7 +74,7 @@ export const processDocumentResponseSchema = z
       sha256: z.string().openapi({ example: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }),
       s3Location: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/default/docs/commercial-lease.pdf' }),
       s3Key: z.string().openapi({ example: 'orgs/default/docs/commercial-lease.pdf' }),
-      routeTaken: z.enum(['digital-pdf', 'docx', 'doc', 'vlm']).openapi({ example: 'digital-pdf' }),
+      routeTaken: z.enum(['digital_pdf', 'digital_docx', 'digital_doc', 'vlm_ocr']).openapi({ example: 'digital_pdf' }),
       pageCount: z.number().openapi({ example: 4 }),
       ast: canonicalDocumentSchema,
       processedAt: z.string().openapi({ example: '2026-10-18T14:30:00.000Z' }),

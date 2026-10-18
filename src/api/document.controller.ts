@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { validateUploadedFile } from '../modules/validation/file-validator.js';
 import { triageAndExtract } from '../modules/extraction/triage.service.js';
@@ -42,51 +43,58 @@ export const processDocumentController = wrap(async (req: Request, res: Response
     'Processing file upload request'
   );
 
-  // 1. Magic bytes & integrity validation
-  const expectedSha256 = req.headers['x-file-sha256'] as string | undefined;
-  const validatedFile = await validateUploadedFile(file, expectedSha256);
+  try {
+    // 1. Magic bytes & integrity validation
+    const expectedSha256 = req.headers['x-file-sha256'] as string | undefined;
+    const validatedFile = await validateUploadedFile(file, expectedSha256);
 
-  // 2. Upload to S3
-  const { s3Url, key } = await uploadBufferToS3(validatedFile.buffer, validatedFile.originalName, {
-    contentType: validatedFile.detectedMimeType,
-    metadata: {
-      sha256: validatedFile.sha256,
-      originalName: validatedFile.originalName,
+    // 2. Upload to S3
+    const { s3Url, key } = await uploadBufferToS3(validatedFile.buffer, validatedFile.originalName, {
+      contentType: validatedFile.detectedMimeType,
+      metadata: {
+        sha256: validatedFile.sha256,
+        originalName: validatedFile.originalName,
+        jobId,
+      },
+    });
+
+    // 3. Triage and extraction into Canonical AST
+    const triageResult = await triageAndExtract(validatedFile);
+
+    log().debug(
+      {
+        jobId,
+        routeTaken: triageResult.routeTaken,
+        pageCount: triageResult.pageCount,
+      },
+      'Document successfully processed and canonicalized'
+    );
+
+    res.status(200).json({
+      success: true,
       jobId,
-    },
-  });
-
-  // 3. Triage and extraction into Canonical AST
-  const triageResult = await triageAndExtract(validatedFile);
-
-  log().debug(
-    {
-      jobId,
-      routeTaken: triageResult.routeTaken,
-      pageCount: triageResult.pageCount,
-    },
-    'Document successfully processed and canonicalized'
-  );
-
-  res.status(200).json({
-    success: true,
-    jobId,
-    status: 'completed',
-    message: 'Document successfully processed and canonicalized.',
-    data: {
-      jobId,
-      originalName: validatedFile.originalName,
-      detectedMimeType: validatedFile.detectedMimeType,
-      sizeBytes: validatedFile.sizeBytes,
-      sha256: validatedFile.sha256,
-      s3Location: s3Url,
-      s3Key: key,
-      routeTaken: triageResult.routeTaken,
-      pageCount: triageResult.pageCount,
-      ast: triageResult.ast,
-      processedAt: new Date().toISOString(),
-    },
-  });
+      status: 'completed',
+      message: 'Document successfully processed and canonicalized.',
+      data: {
+        jobId,
+        originalName: validatedFile.originalName,
+        detectedMimeType: validatedFile.detectedMimeType,
+        sizeBytes: validatedFile.sizeBytes,
+        sha256: validatedFile.sha256,
+        s3Location: s3Url,
+        s3Key: key,
+        routeTaken: triageResult.routeTaken,
+        pageCount: triageResult.pageCount,
+        ast: triageResult.ast,
+        processedAt: new Date().toISOString(),
+      },
+    });
+  } finally {
+    // Ephemeral disk cleanup: ensure temporary file is always deleted even on error
+    if (file.path) {
+      fs.promises.unlink(file.path).catch(() => {});
+    }
+  }
 });
 
 /**
