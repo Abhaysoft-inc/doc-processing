@@ -36,12 +36,10 @@ export interface JobStatusResponse {
 
 export const DOCUMENT_QUEUE_NAME = 'document-processing';
 
-export const redisConnection = {
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-  maxRetriesPerRequest: null,
-};
+import { redisConnection } from '../../config/redis.js';
+export { redisConnection };
+
+
 
 export const documentQueue = new Queue<DocumentJobPayload, DocumentJobResult>(
   DOCUMENT_QUEUE_NAME,

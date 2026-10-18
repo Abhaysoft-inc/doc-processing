@@ -6,12 +6,13 @@ import { startTimer } from '../shared/timer.js';
 import { downloadBufferFromS3, uploadBufferToS3 } from '../modules/storage/s3.service.js';
 import { validateBuffer } from '../modules/validation/file-validator.js';
 import { triageAndExtract } from '../modules/extraction/triage.service.js';
+import { redisConnection } from '../config/redis.js';
 import {
   DOCUMENT_QUEUE_NAME,
-  redisConnection,
   DocumentJobPayload,
   DocumentJobResult,
 } from '../modules/queue/document-queue.js';
+
 
 let workerInstance: Worker<DocumentJobPayload, DocumentJobResult> | null = null;
 
