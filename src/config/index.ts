@@ -24,13 +24,25 @@ const envSchema = z.object({
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  console.error('❌ Invalid or missing environment configuration in .env:');
+  console.error('❌ Invalid or missing environment configuration:');
   for (const issue of parsedEnv.error.issues) {
     console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
   }
-  // In production, terminate process immediately on invalid config
+
+  // In production, terminate process immediately with an explicit explanation
   if (process.env.NODE_ENV === 'production') {
+    const failedKeys = parsedEnv.error.issues.map((i) => i.path.join('.')).join(', ');
+    console.error(
+      `\n🚨 FATAL STARTUP FAILURE: The service cannot start in production mode because required environment configuration is missing or invalid.` +
+      `\n   Missing / invalid keys: [${failedKeys}]` +
+      `\n   Please supply all required environment variables and restart the container/process.\n`
+    );
     process.exit(1);
+  } else {
+    console.warn(
+      '\n⚠️ WARNING: Starting with missing or invalid environment variables in development mode. ' +
+      'Features relying on unconfigured services (e.g. Gemini, S3) will fail at runtime.\n'
+    );
   }
 }
 
