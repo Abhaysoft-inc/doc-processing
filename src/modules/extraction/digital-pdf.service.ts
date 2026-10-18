@@ -28,7 +28,6 @@ export async function extractFromDigitalPdf(
   buffer: Buffer,
   originalFileName: string
 ): Promise<DigitalPdfExtractionResult> {
-  const startHr = process.hrtime.bigint();
   const documentId = crypto.randomUUID();
 
   let pdfDoc: pdfjsLib.PDFDocumentProxy;

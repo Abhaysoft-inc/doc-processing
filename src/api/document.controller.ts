@@ -59,7 +59,7 @@ export const processDocumentController = wrap(async (req: Request, res: Response
     });
 
     // 3. Triage and extraction into Canonical AST
-    const triageResult = await triageAndExtract(validatedFile);
+    const triageResult = await triageAndExtract(validatedFile, jobId);
 
     log().debug(
       {

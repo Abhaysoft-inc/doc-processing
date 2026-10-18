@@ -2,6 +2,7 @@ import puppeteer, { Browser } from 'puppeteer';
 import { CanonicalDocument } from '../canonical/canonical.types.js';
 import { renderCanonicalToHtml } from './html-renderer.js';
 import { log } from '../../shared/context.js';
+import { startTimer } from '../../shared/timer.js';
 
 let browserInstance: Browser | null = null;
 
@@ -36,7 +37,7 @@ process.on('SIGINT', closeBrowser);
 process.on('SIGTERM', closeBrowser);
 
 export async function generatePdfBuffer(doc: CanonicalDocument): Promise<Buffer> {
-  const startHr = process.hrtime.bigint();
+  const stopTimer = startTimer();
   const browser = await getBrowser();
   const page = await browser.newPage();
 
@@ -94,7 +95,7 @@ export async function generatePdfBuffer(doc: CanonicalDocument): Promise<Buffer>
     });
 
     const buffer = Buffer.from(pdfUint8Array);
-    const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
+    const durationMs = stopTimer();
 
     // One INFO summary per generated document
     log().info(

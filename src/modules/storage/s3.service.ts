@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { config } from '../../config/index.js';
 import { AppError } from '../../shared/errors.js';
 import { log } from '../../shared/context.js';
+import { startTimer } from '../../shared/timer.js';
 
 let s3ClientInstance: S3Client | null = null;
 
@@ -46,7 +47,7 @@ export async function uploadBufferToS3(
   filename: string,
   options: UploadOptions
 ): Promise<{ s3Url: string; key: string }> {
-  const startHr = process.hrtime.bigint();
+  const stopTimer = startTimer();
   const { bucketName, region } = config.aws;
   if (!bucketName) {
     throw new AppError('CONFIG_ERROR', 'AWS_S3_BUCKET_NAME is not configured in .env', 500, false);
@@ -75,7 +76,7 @@ export async function uploadBufferToS3(
     const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
     return { s3Url, key };
   } catch (err: unknown) {
-    const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
+    const durationMs = stopTimer();
     const isExpected = err instanceof AppError && err.expected;
     if (isExpected) {
       log().warn({ key, sizeBytes: buffer.length, durationMs, err }, 'Failed to upload object to S3');

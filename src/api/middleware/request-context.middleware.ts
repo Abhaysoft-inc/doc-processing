@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { requestContext } from '../../shared/context.js';
 import { logger } from '../../shared/logger.js';
+import { getElapsedMs } from '../../shared/timer.js';
 
 
 /**
@@ -44,8 +45,7 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
       return;
     }
 
-    const endHr = process.hrtime.bigint();
-    const durationMs = Math.round(Number(endHr - startHr) / 10_000) / 100;
+    const durationMs = getElapsedMs(startHr);
     const status = res.statusCode;
 
     const payload = {

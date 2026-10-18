@@ -19,7 +19,6 @@ export async function extractFromDoc(
   buffer: Buffer,
   originalFileName: string
 ): Promise<CanonicalDocument> {
-  const startHr = process.hrtime.bigint();
   const documentId = crypto.randomUUID();
 
   let extractedDoc: Awaited<ReturnType<WordExtractor['extract']>>;

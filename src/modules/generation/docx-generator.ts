@@ -26,9 +26,10 @@ import {
   CalloutBlock,
 } from '../canonical/canonical.types.js';
 import { log } from '../../shared/context.js';
+import { startTimer } from '../../shared/timer.js';
 
 export async function generateDocxBuffer(doc: CanonicalDocument): Promise<Buffer> {
-  const startHr = process.hrtime.bigint();
+  const stopTimer = startTimer();
   // Build footnote registry from doc.citations
   const footnotesMap: Record<number, { children: Paragraph[] }> = {};
   const citationToFootnoteId = new Map<string, number>();
@@ -367,7 +368,7 @@ export async function generateDocxBuffer(doc: CanonicalDocument): Promise<Buffer
   });
 
   const buffer = await Packer.toBuffer(wordDoc);
-  const durationMs = Math.round(Number(process.hrtime.bigint() - startHr) / 10_000) / 100;
+  const durationMs = stopTimer();
 
   // One INFO summary per generated document
   log().info(

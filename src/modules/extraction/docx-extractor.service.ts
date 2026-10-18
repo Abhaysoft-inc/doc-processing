@@ -19,7 +19,6 @@ export async function extractFromDocx(
   buffer: Buffer,
   originalFileName: string
 ): Promise<CanonicalDocument> {
-  const startHr = process.hrtime.bigint();
   const documentId = crypto.randomUUID();
 
   let html = '';

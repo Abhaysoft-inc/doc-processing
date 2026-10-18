@@ -66,7 +66,6 @@ export async function extractWithVlm(
   originalFileName: string,
   pageCount?: number
 ): Promise<CanonicalDocument> {
-  const startHr = process.hrtime.bigint();
   const documentId = crypto.randomUUID();
 
   if (!config.gemini.apiKey) {
