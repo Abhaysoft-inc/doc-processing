@@ -1,3 +1,6 @@
 .env
 node_modules/
 dist/
+DOCUMENT_PROCESSING_SPECIFICATION.md
+implementation.md
+plan.md

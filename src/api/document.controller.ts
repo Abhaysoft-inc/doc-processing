@@ -13,6 +13,11 @@ import { generateDocxBuffer } from '../modules/generation/docx-generator.js';
 import { generatePdfBuffer } from '../modules/generation/pdf-generator.js';
 import { AppError, wrap } from '../shared/errors.js';
 import { log } from '../shared/context.js';
+import {
+  enqueueDocumentJob,
+  getDocumentJobStatus,
+} from '../modules/queue/document-queue.js';
+
 
 /**
  * Handles multipart file ingestion:
@@ -262,3 +267,64 @@ export const presignedUploadController = wrap(async (req: Request, res: Response
     data: presigned,
   });
 });
+
+/**
+ * Accepts document metadata and S3 location, enqueueing a background processing job.
+ * Returns 202 Accepted with a jobId immediately.
+ */
+export const processDocumentAsyncController = wrap(async (req: Request, res: Response): Promise<void> => {
+  const { s3Key, originalName, mimeType, tenantId, userId } = req.body;
+
+  if (!s3Key || !originalName || !mimeType) {
+    throw new AppError(
+      'MISSING_PARAMETER',
+      'Missing required fields: "s3Key", "originalName", and "mimeType" are required.',
+      400,
+      true
+    );
+  }
+
+  const { jobId } = await enqueueDocumentJob({
+    s3Key,
+    originalName,
+    mimeType,
+    tenantId: tenantId || 'default',
+    userId,
+  });
+
+  res.status(202).json({
+    success: true,
+    jobId,
+    status: 'queued',
+    message: 'Document job accepted and enqueued for background processing.',
+    data: {
+      jobId,
+      status: 'queued',
+      statusUrl: `/api/documents/jobs/${jobId}`,
+    },
+  });
+});
+
+/**
+ * Retrieves the live status, progress, and result of a background document processing job.
+ */
+export const getJobStatusController = wrap(async (req: Request, res: Response): Promise<void> => {
+  const jobId = Array.isArray(req.params.jobId) ? req.params.jobId[0] : req.params.jobId;
+
+  if (!jobId) {
+    throw new AppError('MISSING_PARAMETER', 'Path parameter "jobId" is required.', 400, true);
+  }
+
+  const jobStatus = await getDocumentJobStatus(jobId);
+
+
+  if (!jobStatus) {
+    throw new AppError('JOB_NOT_FOUND', `Document job with ID "${jobId}" was not found.`, 404, true);
+  }
+
+  res.status(200).json({
+    success: true,
+    data: jobStatus,
+  });
+});
+

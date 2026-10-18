@@ -170,17 +170,85 @@ export const presignedUploadResponseSchema = z
       }),
     }),
   })
-  .openapi('PresignedUploadResponse');
+export const processDocumentAsyncRequestSchema = z
+  .object({
+    s3Key: z.string().openapi({
+      description: 'S3 object key where the uploaded binary is stored',
+      example: 'orgs/default/docs/550e8400-e29b-41d4-a716-446655440000/1729272000000-contract.pdf',
+    }),
+    originalName: z.string().openapi({
+      description: 'Original filename with extension',
+      example: 'contract.pdf',
+    }),
+    mimeType: z.string().openapi({
+      description: 'MIME type of the file',
+      example: 'application/pdf',
+    }),
+    tenantId: z.string().optional().openapi({
+      description: 'Optional tenant identifier for multi-tenant isolation',
+      example: 'default',
+    }),
+    userId: z.string().optional().openapi({
+      description: 'Optional user identifier',
+      example: 'user-123',
+    }),
+  })
+  .openapi('ProcessDocumentAsyncRequest');
+
+export const processDocumentAsyncResponseSchema = z
+  .object({
+    success: z.boolean().openapi({ example: true }),
+    jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
+    status: z.string().openapi({ example: 'queued' }),
+    message: z.string().openapi({ example: 'Document job accepted and enqueued for background processing.' }),
+    data: z.object({
+      jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
+      status: z.string().openapi({ example: 'queued' }),
+      statusUrl: z.string().openapi({ example: '/api/documents/jobs/3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
+    }),
+  })
+  .openapi('ProcessDocumentAsyncResponse');
+
+export const jobStatusResponseSchema = z
+  .object({
+    success: z.boolean().openapi({ example: true }),
+    data: z.object({
+      jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
+      status: z.string().openapi({ example: 'completed' }),
+      progress: z.number().openapi({ example: 100 }),
+      result: z
+        .object({
+          jobId: z.string(),
+          documentId: z.string(),
+          status: z.string(),
+          s3AstKey: z.string().optional(),
+          s3AstUrl: z.string().optional(),
+          pageCount: z.number().optional(),
+          durationMs: z.number().optional(),
+        })
+        .optional(),
+      error: z.string().optional(),
+      failedReason: z.string().optional(),
+      createdAt: z.number().optional(),
+      processedOn: z.number().optional(),
+      finishedOn: z.number().optional(),
+    }),
+  })
+  .openapi('JobStatusResponse');
 
 // Register Schemas into Components
 registry.register('CanonicalDocument', canonicalDocumentSchema);
 registry.register('ErrorResponse', errorResponseSchema);
 registry.register('HealthResponse', healthResponseSchema);
 registry.register('ProcessDocumentResponse', processDocumentResponseSchema);
+registry.register('ProcessDocumentAsyncRequest', processDocumentAsyncRequestSchema);
+registry.register('ProcessDocumentAsyncResponse', processDocumentAsyncResponseSchema);
+registry.register('JobStatusResponse', jobStatusResponseSchema);
 registry.register('GenerateAllRequest', generateAllRequestSchema);
 registry.register('GenerateAllResponse', generateAllResponseSchema);
 registry.register('PresignedUploadRequest', presignedUploadRequestSchema);
 registry.register('PresignedUploadResponse', presignedUploadResponseSchema);
+
 
 // ==========================================
 // 2. Route Registration
@@ -299,10 +367,104 @@ registry.registerPath({
   },
 });
 
+// Documents: POST /api/documents/process-async
+registry.registerPath({
+  method: 'post',
+  path: '/api/documents/process-async',
+  summary: 'Async Document Processing Ingestion',
+  description: `High-concurrency document processing ingestion:
+1. Accepts S3 object key, original filename, and MIME type of an already uploaded file.
+2. Enqueues a processing job into BullMQ backed by Redis in < 20ms.
+3. Returns 202 Accepted with a unique jobId and polling URL immediately.
+4. Background workers pull jobs, download buffers from S3, extract AST, and save results back to S3.`,
+  tags: ['Documents'],
+  request: {
+    body: {
+      description: 'Document reference payload with S3 key and metadata',
+      content: {
+        'application/json': {
+          schema: processDocumentAsyncRequestSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    202: {
+      description: 'Document job accepted and queued for asynchronous processing',
+      content: {
+        'application/json': {
+          schema: processDocumentAsyncResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Missing required parameters (s3Key, originalName, or mimeType)',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Queue or Redis scheduling failure',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// Documents: GET /api/documents/jobs/{jobId}
+registry.registerPath({
+  method: 'get',
+  path: '/api/documents/jobs/{jobId}',
+  summary: 'Get Document Processing Job Status',
+  description: 'Polls the live status, progress, and result/error of an asynchronous document processing job.',
+  tags: ['Documents'],
+  request: {
+    params: z.object({
+      jobId: z.string().openapi({
+        description: 'Unique background job identifier returned upon enqueueing',
+        example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Current job status, progress, and results (if completed)',
+      content: {
+        'application/json': {
+          schema: jobStatusResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Job with specified ID not found in queue',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Internal server or Redis retrieval error',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 // Documents: POST /api/documents/generate/docx
 registry.registerPath({
   method: 'post',
   path: '/api/documents/generate/docx',
+
   summary: 'Generate Native DOCX File',
   description: 'Renders and downloads a Microsoft Word (.docx) binary document directly from a Canonical Document AST.',
   tags: ['Generation'],

@@ -29,15 +29,16 @@ export const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 /**
- * Validates a file by inspecting magic bytes, computing SHA-256 hash, and checking size constraints.
- * Supports both memory buffers and disk-stored temporary files.
+ * Validates a buffer by inspecting magic bytes, computing SHA-256 hash, and checking size constraints.
  */
-export async function validateUploadedFile(
-  file: Express.Multer.File,
-  clientSha256?: string
+export async function validateBuffer(
+  buffer: Buffer,
+  originalName: string,
+  clientSha256?: string,
+  filePath?: string
 ): Promise<ValidatedFile> {
-  const fileSize = file?.size ?? file?.buffer?.length ?? 0;
-  if (!file || (fileSize === 0 && !file.path && !file.buffer)) {
+  const fileSize = buffer?.length ?? 0;
+  if (!buffer || fileSize === 0) {
     throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
   }
 
@@ -50,12 +51,6 @@ export async function validateUploadedFile(
       413,
       true
     );
-  }
-
-  // Read buffer from memory or disk
-  const buffer = file.buffer || (file.path ? await fs.promises.readFile(file.path) : undefined);
-  if (!buffer || buffer.length === 0) {
-    throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
   }
 
   // 2. Compute SHA-256 hash
@@ -105,7 +100,7 @@ export async function validateUploadedFile(
     buffer[6] === 0x1a &&
     buffer[7] === 0xe1;
 
-  const originalLower = file.originalname.toLowerCase();
+  const originalLower = originalName.toLowerCase();
 
   if (isPdfHeader) {
     detectedMimeType = 'application/pdf';
@@ -150,11 +145,34 @@ export async function validateUploadedFile(
 
   return {
     buffer,
-    originalName: file.originalname,
+    originalName,
     detectedMimeType,
     detectedExtension,
     sizeBytes: buffer.length,
     sha256,
-    filePath: file.path,
+    filePath,
   };
 }
+
+/**
+ * Validates a file by inspecting magic bytes, computing SHA-256 hash, and checking size constraints.
+ * Supports both memory buffers and disk-stored temporary files.
+ */
+export async function validateUploadedFile(
+  file: Express.Multer.File,
+  clientSha256?: string
+): Promise<ValidatedFile> {
+  const fileSize = file?.size ?? file?.buffer?.length ?? 0;
+  if (!file || (fileSize === 0 && !file.path && !file.buffer)) {
+    throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
+  }
+
+  // Read buffer from memory or disk
+  const buffer = file.buffer || (file.path ? await fs.promises.readFile(file.path) : undefined);
+  if (!buffer || buffer.length === 0) {
+    throw new AppError('EMPTY_FILE', 'Upload rejected: Document buffer is empty or missing.', 400, true);
+  }
+
+  return validateBuffer(buffer, file.originalname, clientSha256, file.path);
+}
+

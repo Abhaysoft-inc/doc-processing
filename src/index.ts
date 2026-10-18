@@ -8,6 +8,9 @@ import { openApiDocument } from './api/docs/openapi.js';
 import { requestContextMiddleware } from './api/middleware/request-context.middleware.js';
 import { errorHandlerMiddleware } from './api/middleware/error-handler.middleware.js';
 import { logger } from './shared/logger.js';
+import { startDocumentWorker, closeDocumentWorker } from './workers/document-processor.worker.js';
+import { closeDocumentQueue } from './modules/queue/document-queue.js';
+
 
 const app = express();
 
@@ -62,13 +65,15 @@ const server = app.listen(config.port, () => {
     },
     `Server listening on port ${config.port} in ${config.env} mode. Swagger UI: http://localhost:${config.port}/api/docs`
   );
-});
 
+  // Start BullMQ background worker fleet
+  startDocumentWorker();
+});
 
 // Graceful shutdown handling
 let isShuttingDown = false;
 
-function gracefulShutdown(signal: string): void {
+async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
@@ -81,16 +86,28 @@ function gracefulShutdown(signal: string): void {
   }, 20000);
   forceExitTimer.unref();
 
-  server.close((err) => {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    logger.info('HTTP server closed.');
+
+    await closeDocumentWorker();
+    await closeDocumentQueue();
+    logger.info('Queue and background worker fleet closed successfully.');
+
     clearTimeout(forceExitTimer);
-    if (err) {
-      logger.error({ err }, 'Error occurred while closing HTTP server');
-      process.exit(1);
-    }
-    logger.info('HTTP server closed successfully. Process exiting.');
     process.exit(0);
-  });
+  } catch (err) {
+    logger.error({ err }, 'Error occurred during graceful shutdown');
+    clearTimeout(forceExitTimer);
+    process.exit(1);
+  }
 }
+
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -55,12 +55,13 @@ export async function uploadBufferToS3(
 
   const s3 = getS3Client();
 
-  // Tenant partitioned path structure
+  // Tenant partitioned path structure under uploads/
   const key =
     options.key ||
     (options.tenantId && options.docId
-      ? `orgs/${options.tenantId}/docs/${options.docId}/${Date.now()}-${filename}`
+      ? `uploads/orgs/${options.tenantId}/docs/${options.docId}/${Date.now()}-${filename}`
       : `uploads/${Date.now()}-${filename}`);
+
 
   try {
     const command = new PutObjectCommand({
@@ -129,7 +130,8 @@ export async function createPresignedUploadUrl(
   const { bucketName } = config.aws;
   const s3 = getS3Client();
 
-  const key = `orgs/${tenantId}/docs/${docId}/${Date.now()}-${filename}`;
+  const key = `uploads/orgs/${tenantId}/docs/${docId}/${Date.now()}-${filename}`;
+
 
   try {
     const command = new PutObjectCommand({
@@ -148,3 +150,41 @@ export async function createPresignedUploadUrl(
     throw new AppError('STORAGE_ERROR', 'Failed to generate presigned upload URL', 500, false);
   }
 }
+
+/**
+ * Downloads an object buffer from S3.
+ */
+export async function downloadBufferFromS3(key: string): Promise<Buffer> {
+  const stopTimer = startTimer();
+  const { bucketName } = config.aws;
+  if (!bucketName) {
+    throw new AppError('CONFIG_ERROR', 'AWS_S3_BUCKET_NAME is not configured in .env', 500, false);
+  }
+
+  const s3 = getS3Client();
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    const response = await s3.send(command, { abortSignal: AbortSignal.timeout(60000) });
+    if (!response.Body) {
+      throw new AppError('STORAGE_ERROR', `Empty body returned from S3 for key: ${key}`, 404, true);
+    }
+
+    const byteArray = await response.Body.transformToByteArray();
+    const durationMs = stopTimer();
+    log().debug({ key, sizeBytes: byteArray.length, durationMs }, 'Successfully downloaded object from S3');
+    return Buffer.from(byteArray);
+  } catch (err: unknown) {
+    const durationMs = stopTimer();
+    if (err instanceof AppError) {
+      throw err;
+    }
+    log().error({ key, durationMs, err }, 'Failed to download object from S3');
+    throw new AppError('STORAGE_ERROR', `Failed to download object from S3: ${(err as Error).message}`, 500, false);
+  }
+}
+

@@ -19,7 +19,14 @@ const envSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().min(1, 'AWS_ACCESS_KEY_ID is required in .env'),
   AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required in .env'),
   AWS_S3_BUCKET_NAME: z.string().min(1, 'AWS_S3_BUCKET_NAME is required in .env'),
+
+  // Redis & Queue Configuration
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.string().default('6379').transform((val) => parseInt(val, 10)),
+  REDIS_PASSWORD: z.string().optional(),
+  QUEUE_CONCURRENCY: z.string().default('5').transform((val) => parseInt(val, 10)),
 });
+
 
 const parsedEnv = envSchema.safeParse(process.env);
 
@@ -59,4 +66,13 @@ export const config = {
     secretAccessKey: env.AWS_SECRET_ACCESS_KEY || '',
     bucketName: env.AWS_S3_BUCKET_NAME || '',
   },
+  redis: {
+    host: env.REDIS_HOST || 'localhost',
+    port: Number(env.REDIS_PORT) || 6379,
+    password: env.REDIS_PASSWORD || undefined,
+  },
+  queue: {
+    concurrency: Number(env.QUEUE_CONCURRENCY) || 5,
+  },
 };
+

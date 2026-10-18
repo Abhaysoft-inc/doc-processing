@@ -6,7 +6,10 @@ import {
   generatePdfController,
   generateAllAndUploadController,
   presignedUploadController,
+  processDocumentAsyncController,
+  getJobStatusController,
 } from './document.controller.js';
+
 import { config } from '../config/index.js';
 
 import os from 'node:os';
@@ -39,15 +42,20 @@ function uploadMiddleware(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-// 1. Ingest, validate magic bytes, triage & extract to Canonical AST
+// 1. Ingest, validate magic bytes, triage & extract to Canonical AST (synchronous)
 router.post('/process', uploadMiddleware, processDocumentController);
 
-// 2. Direct generation endpoints from Canonical AST
+// 2. High-concurrency async queue-driven ingestion
+router.post('/process-async', processDocumentAsyncController);
+router.get('/jobs/:jobId', getJobStatusController);
+
+// 3. Direct generation endpoints from Canonical AST
 router.post('/generate/docx', generateDocxController);
 router.post('/generate/pdf', generatePdfController);
 router.post('/generate/all', generateAllAndUploadController);
 
-// 3. Storage utility: Presigned direct upload
+// 4. Storage utility: Presigned direct upload
 router.post('/presigned-upload', presignedUploadController);
 
 export default router;
+
