@@ -39,14 +39,17 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
     const endHr = process.hrtime.bigint();
     const durationMs = Math.round(Number(endHr - startHr) / 10_000) / 100;
 
+    // Strip query string to ensure sensitive values (tokens, secrets, signed URLs) never leak into logs
+    const sanitizedPath = (req.originalUrl ? req.originalUrl.split('?')[0] : req.path) || '/';
+
     childLogger.info(
       {
         method: req.method,
-        path: req.originalUrl || req.path,
+        path: sanitizedPath,
         status: res.statusCode,
         durationMs,
       },
-      `${req.method} ${req.originalUrl || req.path} ${res.statusCode} ${durationMs}ms`
+      `${req.method} ${sanitizedPath} ${res.statusCode} ${durationMs}ms`
     );
   });
 
