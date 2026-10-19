@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+dist
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.vscode
+.idea
+*.log
+coverage
+scratch
+DOCUMENT_PROCESSING_SPECIFICATION.md
+implementation.md
+plan.md

@@ -1,15 +1,19 @@
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { CanonicalDocument } from '../canonical/canonical.types.js';
 import { renderCanonicalToHtml } from './html-renderer.js';
 import { log } from '../../shared/context.js';
 import { startTimer } from '../../shared/timer.js';
 
 let browserInstance: Browser | null = null;
+let renderCount = 0;
+let activeRenders = 0;
+const MAX_RENDERS_PER_BROWSER = 200;
 
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
     browserInstance = await puppeteer.launch({
       headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -17,18 +21,20 @@ async function getBrowser(): Promise<Browser> {
         '--disable-gpu',
       ],
     });
+    renderCount = 0;
   }
   return browserInstance;
 }
 
 export async function closeBrowser(): Promise<void> {
   if (browserInstance) {
+    const browserToClose = browserInstance;
+    browserInstance = null;
+    renderCount = 0;
     try {
-      await browserInstance.close();
+      await browserToClose.close();
     } catch {
       // Ignore closing errors
-    } finally {
-      browserInstance = null;
     }
   }
 }
@@ -38,10 +44,15 @@ process.on('SIGTERM', closeBrowser);
 
 export async function generatePdfBuffer(doc: CanonicalDocument): Promise<Buffer> {
   const stopTimer = startTimer();
-  const browser = await getBrowser();
-  const page = await browser.newPage();
+  activeRenders++;
+  renderCount++;
+
+  let page: Page | null = null;
 
   try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+
     // SSRF Security: Intercept requests to block internal IPs and arbitrary external fetches
     await page.setRequestInterception(true);
     page.on('request', (req) => {
@@ -111,7 +122,40 @@ export async function generatePdfBuffer(doc: CanonicalDocument): Promise<Buffer>
 
     return buffer;
   } finally {
-    await page.close();
+    if (page) {
+      try {
+        await page.close();
+      } catch {
+        // Ignore page closing error
+      }
+    }
+    activeRenders--;
+
+    // Recycle Chromium if max renders exceeded to prevent memory bloat
+    if (renderCount >= MAX_RENDERS_PER_BROWSER) {
+      if (activeRenders === 0) {
+        log().info(
+          { renderCount, maxRenders: MAX_RENDERS_PER_BROWSER },
+          'Recycling Chromium browser process (active renders: 0)'
+        );
+        await closeBrowser();
+      } else if (browserInstance) {
+        log().info(
+          { renderCount, activeRenders, maxRenders: MAX_RENDERS_PER_BROWSER },
+          'Detaching Chromium browser for recycling after in-flight renders complete'
+        );
+        const oldBrowser = browserInstance;
+        browserInstance = null;
+        renderCount = 0;
+        setTimeout(async () => {
+          try {
+            await oldBrowser.close();
+          } catch {
+            // Ignore closing errors
+          }
+        }, 10000).unref();
+      }
+    }
   }
 }
 
