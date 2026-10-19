@@ -1,8 +1,5 @@
 import { Request, Response } from 'express';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { validateUploadedFile } from '../modules/validation/file-validator.js';
-import { triageAndExtract } from '../modules/extraction/triage.service.js';
 import {
   uploadBufferToS3,
   createPresignedUploadUrl,
@@ -18,89 +15,43 @@ import {
   getDocumentJobStatus,
 } from '../modules/queue/document-queue.js';
 
-
 /**
- * Handles multipart file ingestion:
- * 1. Deep file validation (magic bytes, integrity SHA-256)
- * 2. Upload to S3
- * 3. Triage & extraction (Digital PDF / Mammoth DOCX / Gemini VLM)
- * 4. Normalization into Canonical Document AST
+ * Accepts document metadata and S3 location, enqueueing a background processing job.
+ * Returns 202 Accepted with a jobId immediately (< 15ms).
  */
 export const processDocumentController = wrap(async (req: Request, res: Response): Promise<void> => {
-  const file = req.file;
+  const { s3Key, originalName, mimeType, tenantId, userId } = req.body;
 
-  if (!file) {
+  if (!s3Key || !originalName || !mimeType) {
     throw new AppError(
-      'EMPTY_FILE',
-      'No file uploaded. Please upload a file under the form-data key "file".',
+      'MISSING_PARAMETER',
+      'Missing required fields: "s3Key", "originalName", and "mimeType" are required.',
       400,
       true
     );
   }
 
-  const jobId = crypto.randomUUID();
-  log().debug(
-    {
+  const { jobId } = await enqueueDocumentJob({
+    s3Key,
+    originalName,
+    mimeType,
+    tenantId: tenantId || 'default',
+    userId,
+  });
+
+  res.status(202).json({
+    success: true,
+    jobId,
+    status: 'queued',
+    message: 'Document job accepted and enqueued for background processing.',
+    data: {
       jobId,
-      sizeBytes: file.size,
-      mimeType: file.mimetype,
+      status: 'queued',
+      statusUrl: `/api/documents/jobs/${jobId}`,
     },
-    'Processing file upload request'
-  );
-
-  try {
-    // 1. Magic bytes & integrity validation
-    const expectedSha256 = req.headers['x-file-sha256'] as string | undefined;
-    const validatedFile = await validateUploadedFile(file, expectedSha256);
-
-    // 2. Upload to S3
-    const { s3Url, key } = await uploadBufferToS3(validatedFile.buffer, validatedFile.originalName, {
-      contentType: validatedFile.detectedMimeType,
-      metadata: {
-        sha256: validatedFile.sha256,
-        originalName: validatedFile.originalName,
-        jobId,
-      },
-    });
-
-    // 3. Triage and extraction into Canonical AST
-    const triageResult = await triageAndExtract(validatedFile, jobId);
-
-    log().debug(
-      {
-        jobId,
-        routeTaken: triageResult.routeTaken,
-        pageCount: triageResult.pageCount,
-      },
-      'Document successfully processed and canonicalized'
-    );
-
-    res.status(200).json({
-      success: true,
-      jobId,
-      status: 'completed',
-      message: 'Document successfully processed and canonicalized.',
-      data: {
-        jobId,
-        originalName: validatedFile.originalName,
-        detectedMimeType: validatedFile.detectedMimeType,
-        sizeBytes: validatedFile.sizeBytes,
-        sha256: validatedFile.sha256,
-        s3Location: s3Url,
-        s3Key: key,
-        routeTaken: triageResult.routeTaken,
-        pageCount: triageResult.pageCount,
-        ast: triageResult.ast,
-        processedAt: new Date().toISOString(),
-      },
-    });
-  } finally {
-    // Ephemeral disk cleanup: ensure temporary file is always deleted even on error
-    if (file.path) {
-      fs.promises.unlink(file.path).catch(() => {});
-    }
-  }
+  });
 });
+
 
 /**
  * Generates and downloads a native DOCX file from a Canonical Document AST.
@@ -268,42 +219,6 @@ export const presignedUploadController = wrap(async (req: Request, res: Response
   });
 });
 
-/**
- * Accepts document metadata and S3 location, enqueueing a background processing job.
- * Returns 202 Accepted with a jobId immediately.
- */
-export const processDocumentAsyncController = wrap(async (req: Request, res: Response): Promise<void> => {
-  const { s3Key, originalName, mimeType, tenantId, userId } = req.body;
-
-  if (!s3Key || !originalName || !mimeType) {
-    throw new AppError(
-      'MISSING_PARAMETER',
-      'Missing required fields: "s3Key", "originalName", and "mimeType" are required.',
-      400,
-      true
-    );
-  }
-
-  const { jobId } = await enqueueDocumentJob({
-    s3Key,
-    originalName,
-    mimeType,
-    tenantId: tenantId || 'default',
-    userId,
-  });
-
-  res.status(202).json({
-    success: true,
-    jobId,
-    status: 'queued',
-    message: 'Document job accepted and enqueued for background processing.',
-    data: {
-      jobId,
-      status: 'queued',
-      statusUrl: `/api/documents/jobs/${jobId}`,
-    },
-  });
-});
 
 /**
  * Retrieves the live status, progress, and result of a background document processing job.

@@ -46,41 +46,43 @@ export const healthResponseSchema = z
 
 export const processDocumentRequestSchema = z
   .object({
-    file: z.instanceof(Object).openapi({
-      type: 'string',
-      format: 'binary',
-      description: 'Document file buffer (PDF, DOCX, DOC, PNG, JPEG, TIFF, WebP)',
+    s3Key: z.string().openapi({
+      description: 'S3 object key where the uploaded binary is stored',
+      example: 'uploads/orgs/default/docs/550e8400-e29b-41d4-a716-446655440000/1729272000000-contract.pdf',
+    }),
+    originalName: z.string().openapi({
+      description: 'Original filename with extension',
+      example: 'contract.pdf',
+    }),
+    mimeType: z.string().openapi({
+      description: 'MIME type of the file',
+      example: 'application/pdf',
+    }),
+    tenantId: z.string().optional().openapi({
+      description: 'Optional tenant identifier for multi-tenant isolation',
+      example: 'default',
+    }),
+    userId: z.string().optional().openapi({
+      description: 'Optional user identifier',
+      example: 'user-123',
     }),
   })
   .openapi('ProcessDocumentRequest');
-
-export const processHeadersSchema = z.object({
-  'x-file-sha256': z.string().optional().openapi({
-    description: 'Optional expected SHA-256 hex digest of the file for integrity validation',
-  }),
-});
 
 export const processDocumentResponseSchema = z
   .object({
     success: z.boolean().openapi({ example: true }),
     jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
-    status: z.string().openapi({ example: 'completed' }),
-    message: z.string().openapi({ example: 'Document successfully processed and canonicalized.' }),
+    status: z.string().openapi({ example: 'queued' }),
+    message: z.string().openapi({ example: 'Document job accepted and enqueued for background processing.' }),
     data: z.object({
       jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
-      originalName: z.string().openapi({ example: 'commercial-lease.pdf' }),
-      detectedMimeType: z.string().openapi({ example: 'application/pdf' }),
-      sizeBytes: z.number().openapi({ example: 245120 }),
-      sha256: z.string().openapi({ example: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }),
-      s3Location: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/default/docs/commercial-lease.pdf' }),
-      s3Key: z.string().openapi({ example: 'orgs/default/docs/commercial-lease.pdf' }),
-      routeTaken: z.enum(['digital_pdf', 'digital_docx', 'digital_doc', 'vlm_ocr']).openapi({ example: 'digital_pdf' }),
-      pageCount: z.number().openapi({ example: 4 }),
-      ast: canonicalDocumentSchema,
-      processedAt: z.string().openapi({ example: '2026-10-18T14:30:00.000Z' }),
+      status: z.string().openapi({ example: 'queued' }),
+      statusUrl: z.string().openapi({ example: '/api/documents/jobs/3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
     }),
   })
   .openapi('ProcessDocumentResponse');
+
 
 export const generateDocxRequestSchema = z
   .union([
@@ -170,44 +172,8 @@ export const presignedUploadResponseSchema = z
       }),
     }),
   })
-export const processDocumentAsyncRequestSchema = z
-  .object({
-    s3Key: z.string().openapi({
-      description: 'S3 object key where the uploaded binary is stored',
-      example: 'orgs/default/docs/550e8400-e29b-41d4-a716-446655440000/1729272000000-contract.pdf',
-    }),
-    originalName: z.string().openapi({
-      description: 'Original filename with extension',
-      example: 'contract.pdf',
-    }),
-    mimeType: z.string().openapi({
-      description: 'MIME type of the file',
-      example: 'application/pdf',
-    }),
-    tenantId: z.string().optional().openapi({
-      description: 'Optional tenant identifier for multi-tenant isolation',
-      example: 'default',
-    }),
-    userId: z.string().optional().openapi({
-      description: 'Optional user identifier',
-      example: 'user-123',
-    }),
-  })
-  .openapi('ProcessDocumentAsyncRequest');
+  .openapi('PresignedUploadResponse');
 
-export const processDocumentAsyncResponseSchema = z
-  .object({
-    success: z.boolean().openapi({ example: true }),
-    jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
-    status: z.string().openapi({ example: 'queued' }),
-    message: z.string().openapi({ example: 'Document job accepted and enqueued for background processing.' }),
-    data: z.object({
-      jobId: z.string().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
-      status: z.string().openapi({ example: 'queued' }),
-      statusUrl: z.string().openapi({ example: '/api/documents/jobs/3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
-    }),
-  })
-  .openapi('ProcessDocumentAsyncResponse');
 
 export const jobStatusResponseSchema = z
   .object({
@@ -240,14 +206,14 @@ export const jobStatusResponseSchema = z
 registry.register('CanonicalDocument', canonicalDocumentSchema);
 registry.register('ErrorResponse', errorResponseSchema);
 registry.register('HealthResponse', healthResponseSchema);
+registry.register('ProcessDocumentRequest', processDocumentRequestSchema);
 registry.register('ProcessDocumentResponse', processDocumentResponseSchema);
-registry.register('ProcessDocumentAsyncRequest', processDocumentAsyncRequestSchema);
-registry.register('ProcessDocumentAsyncResponse', processDocumentAsyncResponseSchema);
 registry.register('JobStatusResponse', jobStatusResponseSchema);
 registry.register('GenerateAllRequest', generateAllRequestSchema);
 registry.register('GenerateAllResponse', generateAllResponseSchema);
 registry.register('PresignedUploadRequest', presignedUploadRequestSchema);
 registry.register('PresignedUploadResponse', presignedUploadResponseSchema);
+
 
 
 // ==========================================
@@ -296,19 +262,18 @@ registry.registerPath({
 registry.registerPath({
   method: 'post',
   path: '/api/documents/process',
-  summary: 'Ingest, Triage & Extract Document into Canonical AST',
-  description: `Accepts multipart file upload of documents (Digital PDF, Scanned PDF, Word DOCX/DOC, Images).
-1. Validates magic bytes and file integrity against optional SHA-256 header.
-2. Uploads the pristine original to AWS S3.
-3. Automatically triages to the optimal extraction pipeline (Digital parser vs. Mammoth DOCX vs. Gemini Multimodal VLM).
-4. Normalizes layout, tables, styles, citations, and headings into the Canonical Document AST format.`,
+  summary: 'Async Document Processing Ingestion',
+  description: `High-concurrency document processing ingestion:
+1. Accepts S3 object key, original filename, and MIME type of an uploaded file.
+2. Enqueues a processing job into BullMQ backed by Redis in < 15ms.
+3. Returns 202 Accepted with a unique jobId and polling URL immediately.
+4. Background workers pull jobs, download buffers from S3, extract Canonical AST, and save results back to S3.`,
   tags: ['Documents'],
   request: {
-    headers: processHeadersSchema,
     body: {
-      description: 'Multipart form-data payload containing the binary document file under the "file" field',
+      description: 'Document reference payload with S3 key and metadata',
       content: {
-        'multipart/form-data': {
+        'application/json': {
           schema: processDocumentRequestSchema,
         },
       },
@@ -316,85 +281,11 @@ registry.registerPath({
     },
   },
   responses: {
-    200: {
-      description: 'Document successfully ingested, parsed, and converted to Canonical AST',
+    202: {
+      description: 'Document job accepted and queued for asynchronous background processing',
       content: {
         'application/json': {
           schema: processDocumentResponseSchema,
-        },
-      },
-    },
-    400: {
-      description: 'No file provided or invalid request form',
-      content: {
-        'application/json': {
-          schema: errorResponseSchema,
-        },
-      },
-    },
-    413: {
-      description: 'File size exceeds maximum allowed configured limit',
-      content: {
-        'application/json': {
-          schema: errorResponseSchema,
-        },
-      },
-    },
-    415: {
-      description: 'Unsupported file format or MIME type mismatch with magic bytes',
-      content: {
-        'application/json': {
-          schema: errorResponseSchema,
-        },
-      },
-    },
-    422: {
-      description: 'Corrupt, encrypted, or password-protected document that cannot be processed',
-      content: {
-        'application/json': {
-          schema: errorResponseSchema,
-        },
-      },
-    },
-    500: {
-      description: 'Server or extraction failure during processing pipeline',
-      content: {
-        'application/json': {
-          schema: errorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
-// Documents: POST /api/documents/process-async
-registry.registerPath({
-  method: 'post',
-  path: '/api/documents/process-async',
-  summary: 'Async Document Processing Ingestion',
-  description: `High-concurrency document processing ingestion:
-1. Accepts S3 object key, original filename, and MIME type of an already uploaded file.
-2. Enqueues a processing job into BullMQ backed by Redis in < 20ms.
-3. Returns 202 Accepted with a unique jobId and polling URL immediately.
-4. Background workers pull jobs, download buffers from S3, extract AST, and save results back to S3.`,
-  tags: ['Documents'],
-  request: {
-    body: {
-      description: 'Document reference payload with S3 key and metadata',
-      content: {
-        'application/json': {
-          schema: processDocumentAsyncRequestSchema,
-        },
-      },
-      required: true,
-    },
-  },
-  responses: {
-    202: {
-      description: 'Document job accepted and queued for asynchronous processing',
-      content: {
-        'application/json': {
-          schema: processDocumentAsyncResponseSchema,
         },
       },
     },
@@ -416,6 +307,7 @@ registry.registerPath({
     },
   },
 });
+
 
 // Documents: GET /api/documents/jobs/{jobId}
 registry.registerPath({
