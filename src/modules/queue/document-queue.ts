@@ -17,6 +17,9 @@ export interface DocumentJobResult {
   status: 'completed' | 'failed';
   s3AstKey?: string;
   s3AstUrl?: string;
+  s3MarkdownKey?: string;
+  s3MarkdownUrl?: string;
+  markdownText?: string;
   pageCount?: number;
   durationMs?: number;
   error?: string;

@@ -102,6 +102,15 @@ export const generatePdfRequestSchema = z
   ])
   .openapi('GeneratePdfRequest');
 
+export const generateMarkdownRequestSchema = z
+  .union([
+    canonicalDocumentSchema,
+    z.object({
+      ast: canonicalDocumentSchema,
+    }),
+  ])
+  .openapi('GenerateMarkdownRequest');
+
 export const generateAllRequestSchema = z
   .object({
     ast: canonicalDocumentSchema,
@@ -119,7 +128,7 @@ export const generateAllRequestSchema = z
 export const generateAllResponseSchema = z
   .object({
     success: z.boolean().openapi({ example: true }),
-    message: z.string().openapi({ example: 'Both DOCX and PDF documents generated and stored successfully.' }),
+    message: z.string().openapi({ example: 'DOCX, PDF, and Markdown documents generated and stored successfully.' }),
     data: z.object({
       docId: z.string().openapi({ example: 'doc-89210-lease' }),
       title: z.string().openapi({ example: 'Commercial Lease Agreement' }),
@@ -132,6 +141,12 @@ export const generateAllResponseSchema = z
         s3Location: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/enterprise-client-12/docs/doc-89210-lease/Commercial_Lease.pdf' }),
         downloadUrl: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/enterprise-client-12/docs/doc-89210-lease/Commercial_Lease.pdf?X-Amz-Signature=...' }),
         sizeBytes: z.number().openapi({ example: 89430 }),
+      }),
+      markdown: z.object({
+        s3Location: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/enterprise-client-12/docs/doc-89210-lease/Commercial_Lease.md' }),
+        downloadUrl: z.string().openapi({ example: 'https://doc-processing-bucket.s3.amazonaws.com/orgs/enterprise-client-12/docs/doc-89210-lease/Commercial_Lease.md?X-Amz-Signature=...' }),
+        sizeBytes: z.number().openapi({ example: 12450 }),
+        textSnippet: z.string().optional().openapi({ example: '# Commercial Lease Agreement\n\n## Section 1...' }),
       }),
     }),
   })
@@ -189,6 +204,9 @@ export const jobStatusResponseSchema = z
           status: z.string(),
           s3AstKey: z.string().optional(),
           s3AstUrl: z.string().optional(),
+          s3MarkdownKey: z.string().optional(),
+          s3MarkdownUrl: z.string().optional(),
+          markdownText: z.string().optional(),
           pageCount: z.number().optional(),
           durationMs: z.number().optional(),
         })
@@ -209,6 +227,7 @@ registry.register('HealthResponse', healthResponseSchema);
 registry.register('ProcessDocumentRequest', processDocumentRequestSchema);
 registry.register('ProcessDocumentResponse', processDocumentResponseSchema);
 registry.register('JobStatusResponse', jobStatusResponseSchema);
+registry.register('GenerateMarkdownRequest', generateMarkdownRequestSchema);
 registry.register('GenerateAllRequest', generateAllRequestSchema);
 registry.register('GenerateAllResponse', generateAllResponseSchema);
 registry.register('PresignedUploadRequest', presignedUploadRequestSchema);
@@ -442,6 +461,63 @@ registry.registerPath({
     },
     500: {
       description: 'PDF rendering or browser print failure',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// Documents: POST /api/documents/generate/markdown
+registry.registerPath({
+  method: 'post',
+  path: '/api/documents/generate/markdown',
+  summary: 'Generate Clean Markdown Text for LLMs',
+  description: 'Serializes a Canonical Document AST into clean, token-efficient GitHub-Flavored Markdown (GFM). Returns either a downloadable .md file or JSON containing the markdown text for immediate chatbot prompt context.',
+  tags: ['Generation'],
+  request: {
+    body: {
+      description: 'Canonical Document AST payload (either direct or under the "ast" property)',
+      content: {
+        'application/json': {
+          schema: generateMarkdownRequestSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Clean Markdown content (attachment or JSON payload)',
+      content: {
+        'text/markdown': {
+          schema: {
+            type: 'string',
+            example: '# Contract Title\n\n## Section 1: Definitions\n...',
+          },
+        },
+        'application/json': {
+          schema: z.object({
+            success: z.boolean().openapi({ example: true }),
+            docId: z.string().openapi({ example: 'doc-uuid' }),
+            title: z.string().openapi({ example: 'Contract Title' }),
+            markdown: z.string().openapi({ example: '# Contract Title\n\n## Section 1: Definitions\n...' }),
+          }),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid or missing document AST',
+      content: {
+        'application/json': {
+          schema: errorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Markdown serialization failure',
       content: {
         'application/json': {
           schema: errorResponseSchema,

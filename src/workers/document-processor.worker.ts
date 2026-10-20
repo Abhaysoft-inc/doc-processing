@@ -12,6 +12,7 @@ import {
   DocumentJobPayload,
   DocumentJobResult,
 } from '../modules/queue/document-queue.js';
+import { renderCanonicalToMarkdown } from '../modules/generation/markdown-renderer.js';
 
 
 let workerInstance: Worker<DocumentJobPayload, DocumentJobResult> | null = null;
@@ -68,20 +69,32 @@ export function startDocumentWorker(): Worker<DocumentJobPayload, DocumentJobRes
             await job.updateProgress(60);
             const triageResult = await triageAndExtract(validatedFile, String(job.id));
 
-            // Step 4: Upload Canonical AST JSON to S3
-            await job.updateProgress(85);
+            // Step 4: Serialize Canonical AST and render clean Markdown
+            await job.updateProgress(80);
             const astJson = JSON.stringify(triageResult.ast, null, 2);
             const astBuffer = Buffer.from(astJson, 'utf-8');
+            const markdownText = renderCanonicalToMarkdown(triageResult.ast);
+            const markdownBuffer = Buffer.from(markdownText, 'utf-8');
+
             const tenantPrefix = job.data.tenantId ? `orgs/${job.data.tenantId}/` : '';
             const astKey = `uploads/${tenantPrefix}docs/${triageResult.ast.id}/canonical_ast.json`;
+            const markdownKey = `uploads/${tenantPrefix}docs/${triageResult.ast.id}/document.md`;
 
-
-            const { s3Url, key } = await uploadBufferToS3(astBuffer, 'canonical_ast.json', {
-              key: astKey,
-              contentType: 'application/json',
-              tenantId: job.data.tenantId,
-              docId: triageResult.ast.id,
-            });
+            // Upload both Canonical AST and Markdown to S3 concurrently
+            const [astUpload, markdownUpload] = await Promise.all([
+              uploadBufferToS3(astBuffer, 'canonical_ast.json', {
+                key: astKey,
+                contentType: 'application/json',
+                tenantId: job.data.tenantId,
+                docId: triageResult.ast.id,
+              }),
+              uploadBufferToS3(markdownBuffer, 'document.md', {
+                key: markdownKey,
+                contentType: 'text/markdown; charset=utf-8',
+                tenantId: job.data.tenantId,
+                docId: triageResult.ast.id,
+              }),
+            ]);
 
             await job.updateProgress(100);
 
@@ -90,8 +103,11 @@ export function startDocumentWorker(): Worker<DocumentJobPayload, DocumentJobRes
               jobId: String(job.id),
               documentId: triageResult.ast.id,
               status: 'completed',
-              s3AstKey: key,
-              s3AstUrl: s3Url,
+              s3AstKey: astUpload.key,
+              s3AstUrl: astUpload.s3Url,
+              s3MarkdownKey: markdownUpload.key,
+              s3MarkdownUrl: markdownUpload.s3Url,
+              markdownText,
               pageCount: triageResult.pageCount,
               durationMs,
             };
@@ -103,9 +119,11 @@ export function startDocumentWorker(): Worker<DocumentJobPayload, DocumentJobRes
                 routeTaken: triageResult.routeTaken,
                 pageCount: triageResult.pageCount,
                 durationMs,
-                s3AstKey: key,
+                s3AstKey: astUpload.key,
+                s3MarkdownKey: markdownUpload.key,
+                markdownChars: markdownText.length,
               },
-              'Document job successfully processed and stored'
+              'Document job successfully processed and stored with AST and Markdown'
             );
 
             return result;

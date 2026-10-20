@@ -4,6 +4,7 @@ import {
   getJobStatusController,
   generateDocxController,
   generatePdfController,
+  generateMarkdownController,
   generateAllAndUploadController,
   presignedUploadController,
 } from './document.controller.js';
@@ -20,6 +21,7 @@ router.get('/jobs/:jobId', getJobStatusController);
 // 3. Direct generation endpoints from Canonical AST
 router.post('/generate/docx', generateDocxController);
 router.post('/generate/pdf', generatePdfController);
+router.post('/generate/markdown', generateMarkdownController);
 router.post('/generate/all', generateAllAndUploadController);
 
 export default router;

@@ -8,6 +8,7 @@ import {
 import { validateCanonicalDocument } from '../modules/canonical/canonical.schema.js';
 import { generateDocxBuffer } from '../modules/generation/docx-generator.js';
 import { generatePdfBuffer } from '../modules/generation/pdf-generator.js';
+import { renderCanonicalToMarkdown } from '../modules/generation/markdown-renderer.js';
 import { AppError, wrap } from '../shared/errors.js';
 import { log } from '../shared/context.js';
 import {
@@ -113,7 +114,45 @@ export const generatePdfController = wrap(async (req: Request, res: Response): P
 });
 
 /**
- * Generates both DOCX and PDF, uploads them to S3, and returns presigned download URLs.
+ * Generates and downloads a clean Markdown representation from a Canonical Document AST.
+ */
+export const generateMarkdownController = wrap(async (req: Request, res: Response): Promise<void> => {
+  const rawAst = req.body.ast || req.body;
+  if (!rawAst) {
+    throw new AppError('INVALID_AST', 'Missing document AST in request body.', 400, true);
+  }
+
+  const ast = validateCanonicalDocument(rawAst);
+  const markdownText = renderCanonicalToMarkdown(ast);
+  const filename = `${(ast.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;
+
+  log().debug(
+    {
+      docId: ast.id,
+      format: 'markdown',
+      sizeChars: markdownText.length,
+    },
+    'Markdown document generated for download or prompt context'
+  );
+
+  const acceptsJson = req.headers.accept?.includes('application/json');
+  if (acceptsJson) {
+    res.status(200).json({
+      success: true,
+      docId: ast.id,
+      title: ast.title,
+      markdown: markdownText,
+    });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(markdownText);
+});
+
+/**
+ * Generates DOCX, PDF, and Markdown, uploads them to S3, and returns presigned download URLs.
  */
 export const generateAllAndUploadController = wrap(async (req: Request, res: Response): Promise<void> => {
   const rawAst = req.body.ast || req.body;
@@ -126,14 +165,17 @@ export const generateAllAndUploadController = wrap(async (req: Request, res: Res
   const tenantId = req.body.tenantId || 'default';
   const baseName = (ast.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // Generate both formats concurrently
+  // Generate all formats concurrently
+  const markdownText = renderCanonicalToMarkdown(ast);
+  const markdownBuffer = Buffer.from(markdownText, 'utf-8');
+
   const [docxBuffer, pdfBuffer] = await Promise.all([
     generateDocxBuffer(ast),
     generatePdfBuffer(ast),
   ]);
 
-  // Upload both to S3 concurrently
-  const [docxUpload, pdfUpload] = await Promise.all([
+  // Upload all to S3 concurrently
+  const [docxUpload, pdfUpload, markdownUpload] = await Promise.all([
     uploadBufferToS3(docxBuffer, `${baseName}.docx`, {
       contentType:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -145,12 +187,18 @@ export const generateAllAndUploadController = wrap(async (req: Request, res: Res
       tenantId,
       docId,
     }),
+    uploadBufferToS3(markdownBuffer, `${baseName}.md`, {
+      contentType: 'text/markdown; charset=utf-8',
+      tenantId,
+      docId,
+    }),
   ]);
 
   // Generate presigned download links
-  const [docxDownloadUrl, pdfDownloadUrl] = await Promise.all([
+  const [docxDownloadUrl, pdfDownloadUrl, markdownDownloadUrl] = await Promise.all([
     createPresignedDownloadUrl(docxUpload.key),
     createPresignedDownloadUrl(pdfUpload.key),
+    createPresignedDownloadUrl(markdownUpload.key),
   ]);
 
   log().debug(
@@ -159,13 +207,14 @@ export const generateAllAndUploadController = wrap(async (req: Request, res: Res
       tenantId,
       docxKey: docxUpload.key,
       pdfKey: pdfUpload.key,
+      markdownKey: markdownUpload.key,
     },
-    'Generated and stored both DOCX and PDF'
+    'Generated and stored DOCX, PDF, and Markdown'
   );
 
   res.status(200).json({
     success: true,
-    message: 'Both DOCX and PDF documents generated and stored successfully.',
+    message: 'DOCX, PDF, and Markdown documents generated and stored successfully.',
     data: {
       docId,
       title: ast.title,
@@ -178,6 +227,12 @@ export const generateAllAndUploadController = wrap(async (req: Request, res: Res
         s3Location: pdfUpload.s3Url,
         downloadUrl: pdfDownloadUrl,
         sizeBytes: pdfBuffer.length,
+      },
+      markdown: {
+        s3Location: markdownUpload.s3Url,
+        downloadUrl: markdownDownloadUrl,
+        sizeBytes: markdownBuffer.length,
+        textSnippet: markdownText.slice(0, 1000),
       },
     },
   });
